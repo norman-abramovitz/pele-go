@@ -306,7 +306,7 @@ func draw(db *FlowDb, config *jsobj.Object, rc *core.Context, variant *FlowVaria
 	if tight {
 		titleWidth = common.TitleRoom(options)
 	}
-	title := text.Layout(db.Title, false, measurer, size, titleWidth, text.Bold, icons)
+	title := svg.TitleLabel(db.Title, measurer, size, titleWidth, icons)
 	titleHeight := 0.0
 	if title.Height > 0 {
 		titleHeight = title.Height + 12
@@ -355,7 +355,7 @@ func draw(db *FlowDb, config *jsobj.Object, rc *core.Context, variant *FlowVaria
 			}
 			clusters.WriteString(`<g class="pele-cluster` + classes + `" data-id="` + id + `">` +
 				`<rect x="` + svg.Num(x-float64(c.W/2)) + `" y="` + svg.Num(y-float64(c.H/2)) + `" width="` + svg.Num(c.W) + `" height="` + svg.Num(c.H) +
-				`" rx="` + svg.Radius + `" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + view.style.Shape + `/>`)
+				`" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + svg.Rounded(view.style.Shape) + `/>`)
 			if !struck {
 				clusters.WriteString(svg.LabelSVG(view.label, titleX, titleY, titleAttrs, icons))
 			}

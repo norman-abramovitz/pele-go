@@ -251,7 +251,7 @@ func renderCynefin(m cynefinModel, config *jsobj.Object, rc *core.Context) core.
 			}
 			out.WriteString(`<g class="pele-node` + class + `"` + id + `>` +
 				`<rect x="` + svg.Num(b.cx-float64(item.w/2)) + `" y="` + svg.Num(y) + `" width="` + svg.Num(item.w) + `" height="` + svg.Num(item.h) +
-				`" rx="` + svg.Radius + `" fill="var(--_bg)" stroke="var(--_b)"` + dash + `/>` +
+				`" fill="var(--_bg)" stroke="var(--_b)"` + dash + svg.RoundedStyle + `/>` +
 				svg.LabelSVG(item.label, b.cx, y+float64(item.h/2), ` class="pele-label" font-size="`+itemAttr+`"`+fill, rc.Icons) +
 				`</g>`)
 			y += item.h

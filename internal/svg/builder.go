@@ -7,6 +7,7 @@ import (
 
 	"github.com/Broderick-Westrope/pele-go/internal/jsmath"
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
+	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
 	"github.com/Broderick-Westrope/pele-go/internal/text"
 )
 
@@ -143,30 +144,52 @@ func LabelSVG(label text.Label, cx, cy float64, attrs string, icons *text.Icons)
 		return ""
 	}
 	lh := label.LineHeight
+	heights := label.Heights
 	shift := float64(label.Size * 0.35)
-	y := cy - float64(label.Height/2) + float64(lh/2) + shift
+	top := cy - float64(label.Height/2)
 
-	if len(lines) == 1 && len(lines[0]) == 1 && lines[0][0].Icon == "" && lines[0][0].Style == 0 {
-		return `<text` + attrs + ` x="` + Num(cx) + `" y="` + Num(y) + `" text-anchor="middle">` + Esc(lines[0][0].Text) + `</text>`
+	if len(lines) == 1 && len(lines[0]) == 1 {
+		if only := lines[0][0]; only.Icon == "" && only.Math == nil && only.Style == 0 {
+			return `<text` + attrs + ` x="` + Num(cx) + `" y="` + Num(top+float64(lh/2)+shift) + `" text-anchor="middle">` + Esc(only.Text) + `</text>`
+		}
 	}
 
 	shared := SharedStyle(label)
+	given := attrs
+	var look *mathLook
 	attrs = TextStyle(attrs, shared)
 	var body, extra strings.Builder
 	for i, line := range lines {
-		hasIcon := false
+		h := lh
+		if heights != nil {
+			h = heights[i]
+		}
+		mid := top + float64(h/2)
+		y := mid + shift
+		placed := false
 		for _, span := range line {
-			if span.Icon != "" {
-				hasIcon = true
+			if span.Icon != "" || span.Math != nil {
+				placed = true
 			}
 		}
-		if hasIcon {
+		if placed {
 			x := cx - float64(label.Widths[i]/2)
 			for _, span := range line {
-				if span.Icon != "" {
+				if span.Math != nil {
+					box := `x="` + Num(x) + `" y="` + Num(mid-float64(span.Math.Height/2)) + `" width="` + Num(span.Math.Width) + `" height="` + Num(span.Math.Height) + `"`
+					if look == nil {
+						l := newMathLook(given)
+						look = &l
+					}
+					if look.halo == nil {
+						extra.WriteString(mathSVG(span.Math, box, label.Size, look.attrs))
+					} else {
+						extra.WriteString(`<rect ` + box + ` rx="2" fill="` + *look.halo + `"/>`)
+					}
+				} else if span.Icon != "" {
 					side := float64(label.Size * 1.1)
 					inner := icons.Resolve(span.Icon)
-					extra.WriteString(`<svg class="pele-icon" data-icon="` + EscText(span.Icon) + `" x="` + Num(x) + `" y="` + Num(y-shift-float64(side/2)) +
+					extra.WriteString(`<svg class="pele-icon" data-icon="` + EscText(span.Icon) + `" x="` + Num(x) + `" y="` + Num(mid-float64(side/2)) +
 						`" width="` + Num(side) + `" height="` + Num(side) +
 						`" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
 						inner + `</svg>`)
@@ -187,7 +210,97 @@ func LabelSVG(label text.Label, cx, cy float64, attrs string, icons *text.Icons)
 				body.WriteString(`<tspan x="` + Num(cx) + `" y="` + Num(y) + `"> </tspan>`)
 			}
 		}
-		y += lh
+		top += h
 	}
 	return `<text` + attrs + ` text-anchor="middle" xml:space="preserve">` + body.String() + `</text>` + extra.String()
+}
+
+// mathLook copies only color and opacity, to preserve measured math dimensions. A cluster
+// title's outline gets a solid patch (halo) to hide edges behind math.
+type mathLook struct {
+	attrs string
+	halo  *string
+}
+
+// attrValue is /<prefix>([^"]*)"/ on s: the value of the first such attribute.
+func attrValue(s, prefix string) (string, bool) {
+	at := strings.Index(s, prefix)
+	if at < 0 {
+		return "", false
+	}
+	rest := s[at+len(prefix):]
+	end := strings.IndexByte(rest, '"')
+	if end < 0 {
+		return "", false
+	}
+	return rest[:end], true
+}
+
+// styleValue is /(?:^|;)\s*<name>:([^;]*)/ on a style.
+func styleValue(style, name string) (string, bool) {
+	match := func(p int) (string, bool) {
+		for p < len(style) {
+			r, n := jsstr.Decode(style, p)
+			if !jsstr.IsSpace(r) {
+				break
+			}
+			p += n
+		}
+		if !strings.HasPrefix(style[p:], name+":") {
+			return "", false
+		}
+		rest := style[p+len(name)+1:]
+		if end := strings.IndexByte(rest, ';'); end >= 0 {
+			rest = rest[:end]
+		}
+		return rest, true
+	}
+	if v, ok := match(0); ok {
+		return v, true
+	}
+	for at := 0; at < len(style); at++ {
+		if style[at] == ';' {
+			if v, ok := match(at + 1); ok {
+				return v, true
+			}
+		}
+	}
+	return "", false
+}
+
+func newMathLook(attrs string) mathLook {
+	style, _ := attrValue(attrs, ` style="`)
+	fill, ok := styleValue(style, "fill")
+	if !ok {
+		fill, _ = attrValue(attrs, ` fill="`)
+	}
+	fill = jsstr.Trim(fill)
+	if fill == "none" {
+		halo, ok := attrValue(attrs, ` stroke="`)
+		if !ok {
+			halo = "none"
+		}
+		return mathLook{halo: &halo}
+	}
+	out := ""
+	if fill != "" {
+		out = ` color="` + fill + `"`
+	}
+	if opacity, ok := styleValue(style, "opacity"); ok {
+		if opacity = jsstr.Trim(opacity); opacity != "" {
+			out += ` opacity="` + opacity + `"`
+		}
+	}
+	return mathLook{attrs: out}
+}
+
+// mathSVG writes typeset math in box. The host's markup is trusted.
+func mathSVG(math *text.MathMarkup, box string, size float64, attrs string) string {
+	if !math.HTML {
+		return `<svg class="pele-math" ` + box + ` overflow="visible"` + attrs + `>` + math.Markup + `</svg>`
+	}
+	return `<foreignObject class="pele-math" ` + box + ` overflow="visible"` + attrs + `>` +
+		`<div xmlns="http://www.w3.org/1999/xhtml" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:` + Num(size) +
+		`px;line-height:normal;white-space:nowrap">` + math.Markup + `</div>` +
+		`</foreignObject>`
 }

@@ -45,11 +45,9 @@ func leftLabel(label text.Label, left, cy float64, icons *text.Icons) string {
 		return svg.LabelSVG(label, left+float64(label.Width/2), cy, ` class="pele-label"`, icons)
 	}
 	out := ""
+	top := cy - float64(label.Height/2)
 	for k := range label.Lines {
-		width := label.Widths[k]
-		line := text.Label{Lines: label.Lines[k : k+1], Widths: []float64{width}, Width: width, Height: label.LineHeight, Size: label.Size, LineHeight: label.LineHeight}
-		offset := float64(k) - float64(float64(len(label.Lines)-1)/2)
-		out += svg.LabelSVG(line, left+float64(width/2), cy+float64(offset*label.LineHeight), ` class="pele-label"`, icons)
+		out += svg.LabelSVG(text.LabelLine(label, k), left+float64(label.Widths[k]/2), top+text.LineMiddle(label, k), ` class="pele-label"`, icons)
 	}
 	return out
 }
@@ -408,7 +406,7 @@ func draw(model *mindmapDb, config *jsobj.Object, rc *core.Context, down bool) c
 	if model.title != nil {
 		titleText = *model.title
 	}
-	title := text.Layout(titleText, false, measurer, size, common.TitleRoom(options), text.Bold, icons)
+	title := svg.TitleLabel(titleText, measurer, size, common.TitleRoom(options), icons)
 	titleHeight := 0.0
 	if title.Height > 0 {
 		titleHeight = title.Height + 16

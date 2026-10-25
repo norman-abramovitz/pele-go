@@ -68,11 +68,12 @@ func restyle(label text.Label, bits text.Style, measurer text.Measurer) text.Lab
 		for j, span := range line {
 			style := span.Style | bits
 			w := span.Width
-			if span.Icon == "" {
+			if span.Icon == "" && span.Math == nil {
 				w = measurer.Width(span.Text, label.Size, style)
 			}
 			total += w
-			spans[j] = text.Span{Text: span.Text, Style: style, Icon: span.Icon, Width: w}
+			spans[j] = span
+			spans[j].Style, spans[j].Width = style, w
 		}
 		widths = append(widths, total)
 		if total > width {
@@ -89,10 +90,15 @@ func restyle(label text.Label, bits text.Style, measurer text.Measurer) text.Lab
 // startText writes a measured label with its lines starting at x, the first line's box
 // starting at top.
 func startText(label text.Label, x, top float64, attrs string) string {
-	y := float64(top+float64(label.LineHeight/2)) + float64(label.Size*0.35)
 	shared := svg.SharedStyle(label)
-	var body strings.Builder
-	for _, line := range label.Lines {
+	var body, math strings.Builder
+	for i, line := range label.Lines {
+		middle := top + text.LineMiddle(label, i)
+		if text.HasMath(line) {
+			math.WriteString(svg.LabelSVG(text.LabelLine(label, i), x+float64(label.Widths[i]/2), middle, attrs, nil))
+			continue
+		}
+		y := middle + float64(label.Size*0.35)
 		first := true
 		for _, span := range line {
 			if span.Icon != "" || span.Text == "" {
@@ -105,12 +111,11 @@ func startText(label text.Label, x, top float64, attrs string) string {
 			body.WriteString(`<tspan` + pos + svg.SpanStyle(span.Style&^shared) + `>` + svg.Esc(span.Text) + `</tspan>`)
 			first = false
 		}
-		y += label.LineHeight
 	}
 	if body.Len() == 0 {
-		return ""
+		return math.String()
 	}
-	return `<text` + svg.TextStyle(attrs, shared) + ` text-anchor="start" xml:space="preserve">` + body.String() + `</text>`
+	return `<text` + svg.TextStyle(attrs, shared) + ` text-anchor="start" xml:space="preserve">` + body.String() + `</text>` + math.String()
 }
 
 // containsMarker is the containment mark: a circled plus whose rim touches (x, y), where
@@ -364,7 +369,7 @@ func draw(db *requirementDb, _ *jsobj.Object, rc *core.Context, turned bool) cor
 
 	spreadEnds(cnodes, cedges, views)
 
-	title := text.Layout(db.title, false, measurer, size, 4000, text.Bold, icons)
+	title := svg.TitleLabel(db.title, measurer, size, 4000, icons)
 	titleHeight := 0.0
 	if title.Height > 0 {
 		titleHeight = title.Height + 12
@@ -381,7 +386,7 @@ func draw(db *requirementDb, _ *jsobj.Object, rc *core.Context, turned bool) cor
 		left := float64(-w / 2)
 		top := float64(-h / 2)
 		body := `<rect x="` + svg.Num(left) + `" y="` + svg.Num(top) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) +
-			`" rx="` + svg.Radius + `" fill="var(--_s)" stroke="var(--_b)"` + style.Shape + `/>` +
+			`" fill="var(--_s)" stroke="var(--_b)"` + svg.Rounded(style.Shape) + `/>` +
 			svg.LabelSVG(view.kind, 0, top+padY+float64(view.kind.Height/2),
 				` class="pele-stereotype" font-size="`+jsnum.Format(view.kind.Size)+`" fill="var(--_m)"`+style.Text, nil) +
 			svg.LabelSVG(view.name, 0, top+padY+view.kind.Height+float64(view.name.Height/2),

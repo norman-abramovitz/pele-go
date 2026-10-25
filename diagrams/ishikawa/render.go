@@ -282,7 +282,7 @@ func draw(m *ishikawaDb, _ *jsobj.Object, rc *core.Context, down bool) core.Rend
 				`<path class="pele-ishikawa-bones" d="` + d + `" fill="none" stroke="var(--_l)"/>` +
 				svg.Marker("arrow_point", ax, 0, slant/length, -sign/length, "var(--_l)") +
 				`<rect x="` + svg.Num(endX-float64(c.boxW/2)) + `" y="` + svg.Num(boxY-float64(c.boxH/2)) + `" width="` + svg.Num(c.boxW) + `" height="` +
-				svg.Num(c.boxH) + `" rx="` + svg.Radius + `" fill="var(--_s)" stroke="var(--_b)"/>` +
+				svg.Num(c.boxH) + `" fill="var(--_s)" stroke="var(--_b)"` + svg.RoundedStyle + `/>` +
 				svg.LabelSVG(c.label, endX, boxY, ` class="pele-label"`, rc.Icons))
 			if texts.Len() > 0 {
 				groups.WriteString(`<g class="pele-ishikawa-causes" font-size="` + jsnum.Format(small) + `">` + texts.String() + `</g>`)

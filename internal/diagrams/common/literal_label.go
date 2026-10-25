@@ -100,7 +100,7 @@ func BreakLabel(label text.Label, measurer text.Measurer, room float64) text.Lab
 			width = 0
 		}
 		for _, span := range spans {
-			if span.Icon != "" {
+			if span.Icon != "" || span.Math != nil {
 				if len(current) > 0 && width+span.Width > room {
 					commit()
 				}
@@ -113,7 +113,7 @@ func BreakLabel(label text.Label, measurer text.Measurer, room float64) text.Lab
 				if len(current) > 0 {
 					last = &current[len(current)-1]
 				}
-				joined := last != nil && last.Icon == "" && last.Style == span.Style
+				joined := last != nil && last.Icon == "" && last.Math == nil && last.Style == span.Style
 				var added float64
 				if joined {
 					added = measurer.Width(last.Text+char, label.Size, span.Style) - last.Width
@@ -125,7 +125,7 @@ func BreakLabel(label text.Label, measurer text.Measurer, room float64) text.Lab
 					last = nil
 					added = measurer.Width(char, label.Size, span.Style)
 				}
-				if last != nil && last.Icon == "" && last.Style == span.Style {
+				if last != nil && last.Icon == "" && last.Math == nil && last.Style == span.Style {
 					last.Text += char
 					last.Width += added
 				} else {
@@ -144,6 +144,9 @@ func BreakLabel(label text.Label, measurer text.Measurer, room float64) text.Lab
 		out.Width = max(out.Width, w)
 	}
 	out.Height = float64(len(lines)) * label.LineHeight
+	if label.Heights != nil {
+		return text.WithHeights(out)
+	}
 	return out
 }
 

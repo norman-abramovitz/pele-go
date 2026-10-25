@@ -492,10 +492,10 @@ func draw(db *railroadDb, config *jsobj.Object, rc *core.Context, tight bool) co
 					nodes.WriteString(`<g class="pele-node pele-terminal">` + shape + ` rx="` + num(boxTop) + `" fill="var(--_s)" stroke="var(--_b)"` + stroke + `/>` +
 						label + ` font-family="` + svg.FontMono + `">` + svg.Esc(s) + `</text></g>`)
 				case kNonTerminal:
-					nodes.WriteString(`<g class="pele-node pele-nonterminal" data-id="` + svg.EscText(b.id) + `">` + shape + ` rx="` + svg.Radius +
-						`" fill="var(--_bg)" stroke="var(--_b)"` + stroke + `/>` + label + `>` + svg.Esc(s) + `</text></g>`)
+					nodes.WriteString(`<g class="pele-node pele-nonterminal" data-id="` + svg.EscText(b.id) + `">` + shape +
+						` fill="var(--_bg)" stroke="var(--_b)"` + stroke + svg.RoundedStyle + `/>` + label + `>` + svg.Esc(s) + `</text></g>`)
 				default:
-					nodes.WriteString(`<g class="pele-node pele-special">` + shape + ` rx="` + svg.Radius + `" fill="var(--_bg)" stroke="var(--_b)" stroke-dasharray="4 3"` + stroke + `/>` +
+					nodes.WriteString(`<g class="pele-node pele-special">` + shape + ` fill="var(--_bg)" stroke="var(--_b)" stroke-dasharray="4 3"` + stroke + svg.RoundedStyle + `/>` +
 						label + ` font-style="italic"><tspan fill="var(--_m)">? </tspan>` + svg.Esc(s[2:len(s)-2]) + `<tspan fill="var(--_m)"> ?</tspan></text></g>`)
 				}
 			}

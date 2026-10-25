@@ -18,6 +18,8 @@ const named = "amp:38,lt:60,gt:62,quot:34,apos:39,nbsp:160,iexcl:161,cent:162,po
 	"radic:8730,infin:8734,and:8743,or:8744,cap:8745,cup:8746,int:8747,there4:8756,sim:8764,cong:8773," +
 	"asymp:8776,ne:8800,equiv:8801,le:8804,ge:8805,sub:8834,sup:8835,sube:8838,supe:8839,oplus:8853,otimes:8855," +
 	"perp:8869,sdot:8901,loz:9674,spades:9824,clubs:9827,hearts:9829,diams:9830,check:10003,cross:10007," +
+	"AMP:38,LT:60,GT:62,QUOT:34,lsqb:91,rsqb:93,lcub:123,rcub:125,verbar:124,VerticalLine:124,midast:42," +
+	"DiacriticalGrave:96,Hat:94,UnderBar:95," +
 	"equals:61,colon:58,semi:59,num:35,percnt:37,lpar:40,rpar:41,lbrack:91,rbrack:93,lbrace:123,rbrace:125," +
 	"vert:124,sol:47,bsol:92,quest:63,excl:33,ast:42,plus:43,comma:44,period:46,dollar:36,commat:64,grave:96," +
 	"hat:94,lowbar:95,tilde:126,Alpha:913,Beta:914,Gamma:915,Delta:916,Epsilon:917,Zeta:918,Eta:919,Theta:920," +
@@ -58,9 +60,9 @@ const (
 	placeholderClose = "¶ß"
 )
 
-// decodePlaceholders reads Mermaid's placeholders, which run from ﬂ° to ¶ß, with a second °
-// marking a numeric code.
-func decodePlaceholders(text string) string {
+// restorePlaceholders turns Mermaid's placeholders, which run from ﬂ° to ¶ß, with a second °
+// marking a numeric code, back into entities, so that each code is decoded once.
+func restorePlaceholders(text string) string {
 	var out strings.Builder
 	last := 0
 	from := strings.Index(text, placeholderOpen)
@@ -72,19 +74,14 @@ func decodePlaceholders(text string) string {
 		}
 		if strings.HasPrefix(text[stop+len("¶"):], "ß") {
 			numeric := strings.HasPrefix(text[bodyStart:], "°")
-			if numeric {
-				bodyStart += len("°")
-			}
-			body := text[min(bodyStart, stop):stop]
-			raw := text[from : stop+len(placeholderClose)]
 			out.WriteString(text[last:from])
 			if numeric {
-				out.WriteString(codePoint(jsnum.Parse(body), raw))
-			} else if s, ok := lookup(body); ok {
-				out.WriteString(s)
+				bodyStart += len("°")
+				out.WriteString("&#")
 			} else {
-				out.WriteString("&" + body + ";")
+				out.WriteString("&")
 			}
+			out.WriteString(text[min(bodyStart, stop):stop] + ";")
 			last = stop + len(placeholderClose)
 		}
 		from = indexFrom(text, placeholderOpen, stop+len("¶"))
@@ -148,7 +145,7 @@ func entityAt(s string, i int) (int, string, bool) {
 // HTML entities into characters.
 func DecodeEntities(text string) string {
 	if strings.Contains(text, placeholderClose) {
-		text = decodePlaceholders(text)
+		text = restorePlaceholders(text)
 	}
 	if !strings.Contains(text, "&") {
 		return text

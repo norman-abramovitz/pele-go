@@ -82,7 +82,7 @@ func fitLabel(raw string, markdown bool, measurer text.Measurer, size, max float
 			continue
 		}
 		for _, span := range label.Lines[i] {
-			if span.Icon != "" {
+			if span.Icon != "" || span.Math != nil {
 				if width > 0 && width+span.Width > max {
 					commit()
 				}
@@ -122,6 +122,9 @@ func fitLabel(raw string, markdown bool, measurer text.Measurer, size, max float
 	label.Widths = widths
 	label.Width = widest
 	label.Height = float64(len(lines)) * label.LineHeight
+	if label.Heights != nil {
+		return text.WithHeights(label)
+	}
 	return label
 }
 
@@ -130,8 +133,8 @@ func fitLabel(raw string, markdown bool, measurer text.Measurer, size, max float
 func textBlock(label text.Label, x, y float64, attrs string, icons *text.Icons, end bool) string {
 	var out strings.Builder
 	for i, line := range label.Lines {
-		cy := y + float64((float64(i)+0.5)*label.LineHeight)
-		if len(line) == 1 && line[0].Icon == "" {
+		cy := y + text.LineMiddle(label, i)
+		if len(line) == 1 && line[0].Icon == "" && line[0].Math == nil {
 			anchor := ""
 			if end {
 				anchor = ` text-anchor="end"`
@@ -140,16 +143,11 @@ func textBlock(label text.Label, x, y float64, attrs string, icons *text.Icons, 
 				svg.Esc(line[0].Text) + `</text>`)
 		} else {
 			width := label.Widths[i]
-			one := label
-			one.Lines = [][]text.Span{line}
-			one.Widths = []float64{width}
-			one.Width = width
-			one.Height = label.LineHeight
 			shift := width
 			if end {
 				shift = -width
 			}
-			out.WriteString(svg.LabelSVG(one, x+float64(shift/2), cy, attrs, icons))
+			out.WriteString(svg.LabelSVG(text.LabelLine(label, i), x+float64(shift/2), cy, attrs, icons))
 		}
 	}
 	return out.String()
@@ -182,12 +180,46 @@ func renderKanban(model *kanbanDb, config *jsobj.Object, rc *core.Context) core.
 	has := func(name string) bool { return name != "" && icons.Markup(name) != "" }
 	section, _ := config.Get("kanban")
 	conf, _ := section.(*jsobj.Object)
+	glyph := float64(small * 1.25)
+	// Math can't break across lines, so columns widen to hold the widest expression.
+	mathWidth := 0.0
+	holds := func(raw string, fontSize, reserved float64) {
+		if raw == "" || !strings.Contains(raw, "$$") {
+			return
+		}
+		for _, spans := range text.Layout(raw, true, measurer, fontSize, math.Inf(1), 0, icons).Lines {
+			for _, span := range spans {
+				if span.Math != nil {
+					mathWidth = max(mathWidth, span.Math.Width+reserved)
+				}
+			}
+		}
+	}
+	for _, section := range model.sections {
+		count := measurer.Width(strconv.Itoa(len(section.items)), small, 0)
+		extra := 0.0
+		if has(section.icon) {
+			extra = glyph + iconGap
+		}
+		holds(section.label, size, 2*columnPad+8+count+12+extra)
+		for _, item := range section.items {
+			reserved := float64(2 * (columnPad + cardPad))
+			extra := 0.0
+			if has(item.icon) {
+				extra = glyph + iconGap
+			}
+			holds(item.label, small, reserved+extra)
+			holds(item.ticket, small, reserved)
+			holds(item.assigned, small, reserved)
+		}
+	}
 	ownWidth := 200.0
 	if v, _ := conf.Get("sectionWidth"); v != nil {
 		if sectionWidth, ok := v.(float64); ok && sectionWidth > 0 {
 			ownWidth = min(max(sectionWidth, 80), 2000)
 		}
 	}
+	ownWidth = max(ownWidth, math.Ceil(mathWidth))
 	// A board wider than the width the host has is folded into rows of columns, which then
 	// share the row between them.
 	room := math.Inf(1)
@@ -202,7 +234,7 @@ func renderKanban(model *kanbanDb, config *jsobj.Object, rc *core.Context) core.
 		columnWidth = ownWidth
 	} else {
 		perRowF = max(1, math.Floor((room+columnGap)/(ownWidth+columnGap)))
-		columnWidth = max(min(ownWidth, room), min(math.Floor((room+columnGap)/perRowF)-columnGap, ownWidth*2))
+		columnWidth = max(min(ownWidth, room), min(math.Floor((room+columnGap)/perRowF)-columnGap, ownWidth*2), math.Ceil(mathWidth))
 	}
 	// perRow is a whole number of at least 1; past the number of columns it acts as that number.
 	perRow := int(min(perRowF, float64(max(count, 1))))
@@ -214,7 +246,6 @@ func renderKanban(model *kanbanDb, config *jsobj.Object, rc *core.Context) core.
 	}
 	cardWidth := columnWidth - 2*columnPad
 	textWidth := cardWidth - 2*cardPad
-	glyph := float64(small * 1.25)
 	links := []core.Link{}
 
 	sections := model.sections
@@ -274,7 +305,7 @@ func renderKanban(model *kanbanDb, config *jsobj.Object, rc *core.Context) core.
 		boardHeight = rowTops[len(rowTops)-1] + rowHeights[len(rowHeights)-1]
 	}
 
-	title := text.Layout(model.title, false, measurer, size, common.TitleRoom(opts), text.Bold, icons)
+	title := svg.TitleLabel(model.title, measurer, size, common.TitleRoom(opts), icons)
 	titleHeight := 0.0
 	if title.Height > 0 {
 		titleHeight = title.Height + 16
@@ -288,7 +319,7 @@ func renderKanban(model *kanbanDb, config *jsobj.Object, rc *core.Context) core.
 	for index, section := range sections {
 		row := index / perRow
 		var body strings.Builder
-		body.WriteString(`<rect width="` + jsnum.Format(columnWidth) + `" height="` + svg.Num(rowHeights[row]) + `" rx="` + svg.Radius + `" fill="var(--_s)"/>` +
+		body.WriteString(`<rect width="` + jsnum.Format(columnWidth) + `" height="` + svg.Num(rowHeights[row]) + `" fill="var(--_s)"` + svg.RoundedStyle + `/>` +
 			textBlock(titles[index], columnPad+4, columnPad, ` class="pele-cluster-label" font-weight="var(--_hw)"`, icons, false) +
 			`<text class="pele-count" x="` + jsnum.Format(edge) + `" y="` + svg.Num(columnPad+float64(line/2)+float64(small*0.35)) +
 			`" text-anchor="end" font-size="` + jsnum.Format(small) + `" fill="var(--_m)">` + strconv.Itoa(len(section.items)) + `</text>`)
@@ -301,7 +332,7 @@ func renderKanban(model *kanbanDb, config *jsobj.Object, rc *core.Context) core.
 			item := c.item
 			priority := lowerPriority(item.priority)
 			color, colored := priorityStroke(priority)
-			inner := `<rect width="` + jsnum.Format(cardWidth) + `" height="` + svg.Num(c.height) + `" rx="` + svg.Radius + `" fill="var(--_bg)" stroke="var(--_b)"/>`
+			inner := `<rect width="` + jsnum.Format(cardWidth) + `" height="` + svg.Num(c.height) + `" fill="var(--_bg)" stroke="var(--_b)"` + svg.RoundedStyle + `/>`
 			if colored {
 				inner += `<path class="pele-priority" d="M2.5,5V` + svg.Num(c.height-5) + `" fill="none" ` + color + ` stroke-width="3" stroke-linecap="round"/>`
 			}

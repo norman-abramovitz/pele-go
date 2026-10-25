@@ -64,6 +64,10 @@ type LNode struct {
 	H    float64
 	Kind Kind
 	Pin  float64
+	// Port's cross-flow destination; NaN if unknown. Fully hinted port ranks keep this order.
+	Hint float64
+	// Initial cross-flow position; NaN if unknown. Used only when every node in a rank has one.
+	Key float64
 	// How much of the side that edges meet may be shared out between them; 0 keeps them all at its middle.
 	Span float64
 	X    float64
@@ -108,17 +112,30 @@ type LayeredOptions struct {
 	// the line that shows, and the curves either side of it have the same room to turn in.
 	// Upstream's undefined is 0.
 	HeadRoom float64
+	// Keep each group contiguous within ranks. nil is upstream's undefined.
+	Groups *Groups
+	// Compute cross-flow positions in X without full routing.
+	OrderOnly bool
+}
+
+// Groups maps nodes to groups (Of) and groups to parents (Parent). Both use -1 for none.
+type Groups struct {
+	Of     []int
+	Parent []int
 }
 
 // LayeredResult is the size of a layout.
 type LayeredResult struct {
 	Width  float64
 	Height float64
+	// With OrderOnly: final crossings and crossings before grouping or reordering.
+	Crossings int
+	Declared  int
 }
 
 // NewLNode is upstream's lnode().
 func NewLNode(w, h float64, kind Kind) LNode {
-	return LNode{W: w, H: h, Kind: kind}
+	return LNode{W: w, H: h, Kind: kind, Hint: math.NaN(), Key: math.NaN()}
 }
 
 // NewLEdge is upstream's ledge().
@@ -196,6 +213,9 @@ const leanClear = 40
 // pair of edges against each other would take too long.
 const maxWeighed = 400
 
+// Curve-sampling points per curve.
+const samples = 16
+
 const (
 	endHeld uint8 = iota
 	endLeaves
@@ -253,6 +273,64 @@ func sortRangeInt(list []int, from, to int, key []int) {
 	}
 }
 
+// sortByBary sorts list[:count] by bary, then by pos (descending when right), with insertion
+// sorts of short runs merged through spare, as upstream does to avoid the comparator overhead
+// of the built-in sort.
+func sortByBary(list []int, count int, bary []float64, pos []int, right bool, spare []int) {
+	before := func(a, b int) bool {
+		return bary[a] < bary[b] || (bary[a] == bary[b] && (right && pos[a] > pos[b] || !right && pos[a] < pos[b]))
+	}
+	const run = 8
+	for s := 0; s < count; s += run {
+		for i, end := s+1, min(count, s+run); i < end; i++ {
+			item := list[i]
+			j := i - 1
+			for j >= s && before(item, list[j]) {
+				list[j+1] = list[j]
+				j--
+			}
+			list[j+1] = item
+		}
+	}
+	from := list
+	to := spare
+	inList := true
+	for width := run; width < count; width *= 2 {
+		for s := 0; s < count; s += 2 * width {
+			mid := min(count, s+width)
+			end := min(count, s+2*width)
+			i := s
+			j := mid
+			k := s
+			for i < mid && j < end {
+				if before(from[j], from[i]) {
+					to[k] = from[j]
+					j++
+				} else {
+					to[k] = from[i]
+					i++
+				}
+				k++
+			}
+			for i < mid {
+				to[k] = from[i]
+				k++
+				i++
+			}
+			for j < end {
+				to[k] = from[j]
+				k++
+				j++
+			}
+		}
+		from, to = to, from
+		inList = !inList
+	}
+	if !inList {
+		copy(list[:count], from[:count])
+	}
+}
+
 func fillInt(n, v int) []int {
 	s := make([]int, n)
 	for i := range s {
@@ -268,6 +346,13 @@ func Layered(ctx context.Context, nodes []LNode, edges []LEdge, opt LayeredOptio
 		return LayeredResult{}
 	}
 	m := len(edges)
+	if real == 1 && m == 0 && nodes[0].Kind == KindNode {
+		node := &nodes[0]
+		node.Rank = 0
+		node.X = float64(node.W / 2)
+		node.Y = float64(node.H / 2)
+		return LayeredResult{Width: node.W, Height: node.H}
+	}
 
 	// Every edge gets a middle rank of its own when labels or parallel edges need the room.
 	step := 1
@@ -367,6 +452,13 @@ func Layered(ctx context.Context, nodes []LNode, edges []LEdge, opt LayeredOptio
 	}
 	firstSeg := fillInt(m, -1)
 	lastSeg := fillInt(m, -1)
+	KEY := make([]float64, n)
+	for i := range KEY {
+		KEY[i] = math.NaN()
+	}
+	for i := 0; i < real; i++ {
+		KEY[i] = nodes[i].Key
+	}
 	offsets := false
 	{
 		next := real
@@ -423,6 +515,7 @@ func Layered(ctx context.Context, nodes []LNode, edges []LEdge, opt LayeredOptio
 				d := next
 				next++
 				RANK[d] = r
+				KEY[d] = KEY[a] + (KEY[b]-KEY[a])*float64(r-ra)/float64(rb-ra)
 				if r == labelRank {
 					W[d] = e.LabelW
 					H[d] = e.LabelH
@@ -463,6 +556,48 @@ func Layered(ctx context.Context, nodes []LNode, edges []LEdge, opt LayeredOptio
 			}
 			lastSeg[ei] = ce
 			ce++
+		}
+	}
+
+	// Bends belong to the innermost group containing both edge endpoints.
+	var GRP []int
+	if opt.Groups != nil {
+		of, parent := opt.Groups.Of, opt.Groups.Parent
+		GRP = make([]int, n)
+		for i := 0; i < real; i++ {
+			GRP[i] = of[i]
+		}
+		depth := func(gr int) int {
+			d := 0
+			for ; gr >= 0; gr = parent[gr] {
+				d++
+			}
+			return d
+		}
+		lca := func(x, y int) int {
+			dx := depth(x)
+			dy := depth(y)
+			for ; dx > dy; dx-- {
+				x = parent[x]
+			}
+			for ; dy > dx; dy-- {
+				y = parent[y]
+			}
+			for x != y {
+				x = parent[x]
+				y = parent[y]
+			}
+			return x
+		}
+		for ei := 0; ei < m; ei++ {
+			if firstDummy[ei] < 0 {
+				continue
+			}
+			e := &edges[ei]
+			gr := lca(of[e.Tail], of[e.Head])
+			for d, end := firstDummy[ei], firstDummy[ei]+span[ei]-1; d < end; d++ {
+				GRP[d] = gr
+			}
 		}
 	}
 
@@ -535,6 +670,35 @@ func Layered(ctx context.Context, nodes []LNode, edges []LEdge, opt LayeredOptio
 		}
 	}
 
+	sortRank := func(r int, key func(v int) float64) bool {
+		s := layerStart[r]
+		e := layerStart[r+1]
+		if e-s < 2 {
+			return false
+		}
+		for i := s; i < e; i++ {
+			if math.IsNaN(key(order[i])) {
+				return false
+			}
+		}
+		layer := slices.Clone(order[s:e])
+		index := make(map[int]int, len(layer))
+		for i, v := range layer {
+			index[v] = i
+		}
+		slices.SortStableFunc(layer, func(a, b int) int {
+			if c := sign(key(a) - key(b)); c != 0 {
+				return c
+			}
+			return index[a] - index[b]
+		})
+		copy(order[s:], layer)
+		return true
+	}
+	for r := 0; r <= maxRank; r++ {
+		sortRank(r, func(v int) float64 { return KEY[v] })
+	}
+
 	pinned := false
 	for i := 0; i < real; i++ {
 		if nodes[i].Pin != 0 {
@@ -563,6 +727,19 @@ func Layered(ctx context.Context, nodes []LNode, edges []LEdge, opt LayeredOptio
 			copy(order[layerStart[r]:], layer)
 		}
 	}
+	// Preserve port order to avoid crossings outside the group.
+	fixed := make([]uint8, maxRank+1)
+	hint := func(v int) float64 {
+		if v < real && (nodes[v].Kind == KindStartPort || nodes[v].Kind == KindEndPort) {
+			return nodes[v].Hint
+		}
+		return math.NaN()
+	}
+	for _, r := range [2]int{0, maxRank} {
+		if sortRank(r, hint) {
+			fixed[r] = 1
+		}
+	}
 	setPositions := func() {
 		for r := 0; r <= maxRank; r++ {
 			s := layerStart[r]
@@ -574,11 +751,39 @@ func Layered(ctx context.Context, nodes []LNode, edges []LEdge, opt LayeredOptio
 	setPositions()
 
 	g := &graph{n: n, real: real, maxRank: maxRank, W: W, KIND: KIND, RANK: RANK, EF: EF, ET: ET, EFD: EFD, ETD: ETD,
-		succStart: succStart, succE: succE, predStart: predStart, predE: predE, layerStart: layerStart, order: order, pos: pos, offsets: offsets}
+		succStart: succStart, succE: succE, predStart: predStart, predE: predE, layerStart: layerStart, order: order, pos: pos, offsets: offsets, fixed: fixed, GRP: GRP}
+	if opt.Groups != nil {
+		g.groupParent = opt.Groups.Parent
+	}
 
+	crossings := 0
+	declared := 0
 	if segments > 0 && maxRank > 0 {
-		reduceCrossings(ctx, g, nodes)
+		crossings, declared = reduceCrossings(ctx, g, nodes)
 		setPositions()
+	}
+	if opt.OrderOnly {
+		// Points are (rank, cross-flow position) pairs.
+		at := position(ctx, g, opt)
+		for i := 0; i < real; i++ {
+			nodes[i].X = at[i]
+		}
+		for ei := 0; ei < m; ei++ {
+			e := &edges[ei]
+			a, b := e.Tail, e.Head
+			if e.Reversed {
+				a, b = e.Head, e.Tail
+			}
+			pts := []float64{float64(RANK[a]), at[a]}
+			if direct[ei] == 0 && firstDummy[ei] >= 0 {
+				for d, end := firstDummy[ei], firstDummy[ei]+span[ei]-1; d < end; d++ {
+					pts = append(pts, float64(RANK[d]), at[d])
+				}
+			}
+			pts = append(pts, float64(RANK[b]), at[b])
+			e.Points = pts
+		}
+		return LayeredResult{Crossings: crossings, Declared: declared}
 	}
 
 	if EFK != nil && ETK != nil {
@@ -963,6 +1168,10 @@ type graph struct {
 	order      []int
 	pos        []int
 	offsets    bool
+	// Ranks whose order must remain fixed.
+	fixed       []uint8
+	GRP         []int
+	groupParent []int
 }
 
 // orient reverses the edges that close a cycle, found by depth-first search in declaration order.
@@ -1164,9 +1373,9 @@ func rank(ctx context.Context, nodes []LNode, edges []LEdge, step int) {
 }
 
 // sideEnds lists the ends of edges that may move along one side of a node (0 the side its edges
-// arrive at, 1 the other), in the order of the nodes at their other ends, so that no two cross.
-// `room` receives the least distance between each end and the one before it, and the result is
-// their sum. When there is too little room for a full pitch between each pair, the edges that
+// arrive at, 1 the other), ordered by their opposite nodes to avoid crossings. `ids` and `room`
+// must start empty. `ids` receives the ends; `room` receives their minimum gaps. Returns the sum
+// of the gaps. When there is too little room for a full pitch between each pair, the edges that
 // leave side by side move closer together, since they have no arrowheads to keep apart. With
 // less room still, neighbours that run the same way share a place, which keeps an arrowhead
 // apart from an edge that leaves beside it.
@@ -1176,7 +1385,6 @@ func sideEnds(g *graph, v, side int, span float64, kinds []uint8, ids *[]int, ro
 		start, list, other = g.predStart, g.predE, g.EF
 	}
 	pos := g.pos
-	*ids = (*ids)[:0]
 	for k := start[v]; k < start[v+1]; k++ {
 		if kinds[list[k]] != endHeld {
 			*ids = append(*ids, list[k])
@@ -1235,8 +1443,6 @@ func sideEnds(g *graph, v, side int, span float64, kinds []uint8, ids *[]int, ro
 // spread gives the edges that meet one side of a node places of their own along it, around its middle.
 func spread(g *graph, nodes []LNode, EFK, ETK []uint8) {
 	real, W, EFD, ETD := g.real, g.W, g.EFD, g.ETD
-	ids := []int{}
-	room := []float64{}
 	for v := 0; v < real; v++ {
 		span := min(nodes[v].Span, W[v])
 		if span <= 0 || nodes[v].Kind != KindNode {
@@ -1247,6 +1453,8 @@ func spread(g *graph, nodes []LNode, EFK, ETK []uint8) {
 			if side == 0 {
 				kinds, dx = ETK, ETD
 			}
+			ids := []int{}
+			room := []float64{}
 			total := sideEnds(g, v, side, span, kinds, &ids, &room)
 			if total == 0 {
 				continue
@@ -1446,11 +1654,6 @@ func alignLabels(ctx context.Context, g *graph, nodes []LNode, xs []float64, fre
 func settle(ctx context.Context, g *graph, nodes []LNode, xs []float64, EFK, ETK []uint8, free [2][]int, empty []uint8) {
 	real, W, EF, ET, EFD, ETD := g.real, g.W, g.EF, g.ET, g.EFD, g.ETD
 	succStart, succE, predStart, predE, pos := g.succStart, g.succE, g.predStart, g.predE, g.pos
-	ids := []int{}
-	room := []float64{}
-	all := []int{}
-	sum := []float64{}
-	count := []int{}
 	// Where the end of segment `e` on node `v` should be, from the middle of its side. The edge is
 	// followed up from the segment (side 0) or down, past the bends in ranks that hold nothing
 	// else, to where it next comes to a point that is held in place or to another node's side.
@@ -1491,109 +1694,123 @@ func settle(ctx context.Context, g *graph, nodes []LNode, xs []float64, EFK, ETK
 		place := (float64(xs[v]*width) + float64(middle*span)) / (width + span)
 		return max(lo, min(hi, place)) - xs[v]
 	}
+	// End order and spacing stay fixed across passes; held ends divide free ends into runs.
+	type sideList struct {
+		v    int
+		side int
+		span float64
+		ids  []int
+		room []float64
+		all  []int
+	}
+	sides := []sideList{}
+	for v := 0; v < real; v++ {
+		span := min(nodes[v].Span, W[v])
+		if span <= 0 || nodes[v].Kind != KindNode {
+			continue
+		}
+		for side := 0; side < 2; side++ {
+			kinds, other, start, list := EFK, ET, succStart, succE
+			if side == 0 {
+				kinds, other, start, list = ETK, EF, predStart, predE
+			}
+			ids := []int{}
+			room := []float64{}
+			sideEnds(g, v, side, span, kinds, &ids, &room)
+			if len(ids) == 0 {
+				continue
+			}
+			if len(ids) == 1 {
+				room = []float64{0}
+			}
+			all := []int{}
+			for k := start[v]; k < start[v+1]; k++ {
+				all = append(all, list[k])
+			}
+			slices.SortStableFunc(all, func(a, b int) int {
+				if d := pos[other[a]] - pos[other[b]]; d != 0 {
+					return d
+				}
+				return a - b
+			})
+			sides = append(sides, sideList{v, side, span, ids, room, all})
+		}
+	}
 	// The ends of an edge follow each other, so the nodes are gone over until none moves: a few
 	// times at most, in practice.
 	for pass, moved := 0, true; moved && pass < 6; pass++ {
 		checkCancel(ctx)
 		moved = false
-		for v := 0; v < real; v++ {
-			span := min(nodes[v].Span, W[v])
-			if span <= 0 || nodes[v].Kind != KindNode {
-				continue
+		for _, sl := range sides {
+			v, side, span, ids, room, all := sl.v, sl.side, sl.span, sl.ids, sl.room, sl.all
+			kinds, dx := EFK, EFD
+			if side == 0 {
+				kinds, dx = ETK, ETD
 			}
-			for side := 0; side < 2; side++ {
-				kinds, dx, other, start, list := EFK, EFD, ET, succStart, succE
-				if side == 0 {
-					kinds, dx, other, start, list = ETK, ETD, EF, predStart, predE
-				}
-				sideEnds(g, v, side, span, kinds, &ids, &room)
-				if len(ids) == 0 {
+			k := 0
+			lo := -float64(span / 2)
+			for i := 0; i <= len(all); i++ {
+				held := i < len(all) && kinds[all[i]] == endHeld
+				if i < len(all) && !held {
 					continue
 				}
-				if len(ids) == 1 {
-					if len(room) == 0 {
-						room = append(room, 0)
-					} else {
-						room[0] = 0
-					}
+				// Free ends since the last held end occupy ids[k..k + size).
+				size := 0
+				for j := i - 1; j >= 0 && kinds[all[j]] != endHeld; j-- {
+					size++
 				}
-				// Every end on the side in order, the held ones among them, which divide the rest into runs.
-				all = all[:0]
-				for k := start[v]; k < start[v+1]; k++ {
-					all = append(all, list[k])
+				hi := float64(span / 2)
+				if held {
+					hi = dx[all[i]] - portPitch
 				}
-				slices.SortStableFunc(all, func(a, b int) int {
-					if d := pos[other[a]] - pos[other[b]]; d != 0 {
-						return d
+				if size > 0 {
+					// Isotonic fitting preserves order and spacing by pooling neighbours that are too close.
+					sum := []float64{}
+					count := []int{}
+					before := 0.0
+					for j := 0; j < size; j++ {
+						if j > 0 {
+							before += room[k+j]
+						}
+						sum = append(sum, wanted(ids[k+j], side, v, span, pass > 0)-before)
+						count = append(count, 1)
+						// Keep ends together when spacing forced them to share a place.
+						together := j > 0 && room[k+j] == 0
+						for len(sum) > 1 && (together || sum[len(sum)-2]/float64(count[len(count)-2]) > sum[len(sum)-1]/float64(count[len(count)-1])) {
+							together = false
+							top := sum[len(sum)-1]
+							sum = sum[:len(sum)-1]
+							pooled := count[len(count)-1]
+							count = count[:len(count)-1]
+							sum[len(sum)-1] += top
+							count[len(count)-1] += pooled
+						}
 					}
-					return a - b
-				})
-				k := 0
-				lo := -float64(span / 2)
-				for i := 0; i <= len(all); i++ {
-					held := i < len(all) && kinds[all[i]] == endHeld
-					if i < len(all) && !held {
-						continue
-					}
-					// The run of free ends before this point is ids[k..], as many as were passed since the last held end.
-					size := 0
-					for j := i - 1; j >= 0 && kinds[all[j]] != endHeld; j-- {
-						size++
-					}
-					hi := float64(span / 2)
-					if held {
-						hi = dx[all[i]] - portPitch
-					}
-					if size > 0 {
-						// The places nearest the wanted ones that keep the order and the room between
-						// neighbours: an isotonic fit, by pooling neighbours that would otherwise be too close.
-						sum = sum[:0]
-						count = count[:0]
-						before := 0.0
-						for j := 0; j < size; j++ {
+					total := before
+					j := 0
+					before = 0
+					for b := range sum {
+						// Center the run if it cannot fit between held ends.
+						var level float64
+						if hi-total < lo {
+							level = float64((lo + hi - total) / 2)
+						} else {
+							level = max(lo, min(hi-total, sum[b]/float64(count[b])))
+						}
+						for c := 0; c < count[b]; c, j = c+1, j+1 {
 							if j > 0 {
 								before += room[k+j]
 							}
-							sum = append(sum, wanted(ids[k+j], side, v, span, pass > 0)-before)
-							count = append(count, 1)
-							// Ends that share a place for want of room stay together.
-							together := j > 0 && room[k+j] == 0
-							for len(sum) > 1 && (together || sum[len(sum)-2]/float64(count[len(count)-2]) > sum[len(sum)-1]/float64(count[len(count)-1])) {
-								together = false
-								top := sum[len(sum)-1]
-								sum = sum[:len(sum)-1]
-								pooled := count[len(count)-1]
-								count = count[:len(count)-1]
-								sum[len(sum)-1] += top
-								count[len(count)-1] += pooled
+							if math.Abs(dx[ids[k+j]]-level-before) > 0.01 {
+								moved = true
 							}
+							dx[ids[k+j]] = level + before
 						}
-						total := before
-						j := 0
-						before = 0
-						for b := range sum {
-							// With too little room between two held ends, the run sits in the middle of what there is.
-							var level float64
-							if hi-total < lo {
-								level = float64((lo + hi - total) / 2)
-							} else {
-								level = max(lo, min(hi-total, sum[b]/float64(count[b])))
-							}
-							for c := 0; c < count[b]; c, j = c+1, j+1 {
-								if j > 0 {
-									before += room[k+j]
-								}
-								if math.Abs(dx[ids[k+j]]-level-before) > 0.01 {
-									moved = true
-								}
-								dx[ids[k+j]] = level + before
-							}
-						}
-						k += size
 					}
-					if held {
-						lo = dx[all[i]] + portPitch
-					}
+					k += size
+				}
+				if held {
+					lo = dx[all[i]] + portPitch
 				}
 			}
 		}
@@ -1759,6 +1976,9 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 		byRank.Set(rank[k], append(list, k))
 	}
 	track, levels := pc.track, pc.levels
+	if byRank.Len() == 0 {
+		return
+	}
 	// The pieces are compared pair by pair, so where each begins and ends across the flow is worked out once.
 	LO := make([]float64, total)
 	HI := make([]float64, total)
@@ -1782,6 +2002,25 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 	}
 	// How often a and b cross with a on the higher track: a's way down through b, and b's way down to itself through a.
 	crossings := func(a, b int) int { return within(to[a], b) + within(from[b], a) }
+	// Returns pairs of list indices, smaller first. Omitted pairs cannot meet or clash.
+	nearPairs := func(list []int) []int {
+		byLo := make([]int, len(list))
+		for i := range byLo {
+			byLo[i] = i
+		}
+		slices.SortStableFunc(byLo, func(a, b int) int { return sign(LO[list[a]] - LO[list[b]]) })
+		pairs := []int{}
+		for x := 0; x < len(byLo); x++ {
+			checkCancel(ctx)
+			i := byLo[x]
+			reach := HI[list[i]] + 4*inLine
+			for y := x + 1; y < len(byLo) && LO[list[byLo[y]]] <= reach; y++ {
+				j := byLo[y]
+				pairs = append(pairs, min(i, j), max(i, j))
+			}
+		}
+		return pairs
+	}
 
 	// lay gives the pieces of one gap in `list` their tracks, and each the number of tracks that
 	// the pieces it has to do with take between them, counting its own from the first of those.
@@ -1811,42 +2050,62 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 			}
 			return i
 		}
-		sequence := list
-		if count <= maxWeighed {
+		weighed := count <= maxWeighed
+		// Avoid storing quadratically many pairs in dense gaps.
+		var pairs []int
+		var clashes [][]int
+		if weighed {
+			pairs = nearPairs(list)
+			clashes = make([][]int, count)
+		}
+		for p := 0; p < len(pairs); p += 2 {
+			i := pairs[p]
+			j := pairs[p+1]
+			if !clash(list[i], list[j]) {
+				continue
+			}
+			clashes[i] = append(clashes[i], j)
+			clashes[j] = append(clashes[j], i)
+		}
+		sequence := make([]int, count)
+		for i := range sequence {
+			sequence[i] = i
+		}
+		if weighed {
 			// above[j] lists the pieces that should be above list[j]. The order follows as many of
 			// these as it can: a piece is placed once all that should be above it are, and when
 			// none is free, the one with the fewest still waiting.
 			waiting := make([]int, count)
 			after := make([][]int, count)
 			above = make([][]int, count)
-			for i := 0; i < count; i++ {
-				checkCancel(ctx)
-				for j := i + 1; j < count; j++ {
-					a := list[i]
-					b := list[j]
-					if !meet(a, b) {
-						continue
-					}
-					ri := find(i)
-					rj := find(j)
-					group[ri] = rj
-					ab := crossings(a, b)
-					ba := crossings(b, a)
-					if ab == ba {
-						continue
-					}
-					first, second := j, i
-					if ab < ba {
-						first, second = i, j
-					}
-					above[second] = append(above[second], first)
-					after[first] = append(after[first], second)
-					waiting[second]++
+			for p := 0; p < len(pairs); p += 2 {
+				i := pairs[p]
+				j := pairs[p+1]
+				a := list[i]
+				b := list[j]
+				if !meet(a, b) {
+					continue
 				}
+				ri := find(i)
+				rj := find(j)
+				group[ri] = rj
+				ab := crossings(a, b)
+				ba := crossings(b, a)
+				if ab == ba {
+					continue
+				}
+				first, second := j, i
+				if ab < ba {
+					first, second = i, j
+				}
+				above[second] = append(above[second], first)
+				after[first] = append(after[first], second)
+				waiting[second]++
 			}
 			placed := make([]uint8, count)
-			result := make([]int, 0, count)
+			sequence = sequence[:0]
 			for done := 0; done < count; done++ {
+				checkCancel(ctx)
 				pick := -1
 				for i := 0; i < count; i++ {
 					if placed[i] != 0 {
@@ -1860,72 +2119,67 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 					}
 				}
 				placed[pick] = 1
-				result = append(result, pick)
+				sequence = append(sequence, pick)
 				for _, j := range after[pick] {
 					waiting[j]--
 				}
 			}
-			sequence = make([]int, count)
-			for i, r := range result {
-				sequence[i] = list[r]
-			}
 		}
-		// Each piece takes the first track below those it should be under that has room for it.
-		place := make(map[int]int, count)
-		for i, k := range list {
-			place[k] = i
-		}
-		rows := [][]int{}
-		for _, k := range sequence {
+		taken := map[int]struct{}{}
+		onTrack := [][]int{}
+		rows := 0
+		for _, at := range sequence {
+			k := list[at]
 			t := 0
-			if p := place[k]; p < len(above) {
-				for _, i := range above[p] {
+			if at < len(above) {
+				for _, i := range above[at] {
 					if track[list[i]] >= t {
 						t = track[list[i]] + 1
 					}
 				}
 			}
-			for ; ; t++ {
-				for len(rows) <= t {
-					rows = append(rows, nil)
+			if weighed {
+				clear(taken)
+				for _, i := range clashes[at] {
+					taken[track[list[i]]] = struct{}{}
 				}
-				free := true
-				for _, other := range rows[t] {
-					if clash(k, other) {
-						free = false
+				for {
+					if _, ok := taken[t]; !ok {
+						break
 					}
+					t++
 				}
-				if free {
-					rows[t] = append(rows[t], k)
-					break
+			} else {
+				for t < len(onTrack) && slices.ContainsFunc(onTrack[t], func(other int) bool { return clash(k, other) }) {
+					t++
 				}
+				for len(onTrack) <= t {
+					onTrack = append(onTrack, nil)
+				}
+				onTrack[t] = append(onTrack[t], k)
 			}
 			track[k] = t
-		}
-		first := map[int]int{}
-		lastOf := map[int]int{}
-		for i, k := range list {
-			root := find(i)
-			if f, ok := first[root]; !ok || track[k] < f {
-				first[root] = track[k]
-			}
-			if l, ok := lastOf[root]; !ok || track[k] > l {
-				lastOf[root] = track[k]
+			if t >= rows {
+				rows = t + 1
 			}
 		}
-		for i, k := range list {
+		first := fillInt(count, rows)
+		last := fillInt(count, -1)
+		for i := 0; i < count; i++ {
 			root := find(i)
-			levels[k] = lastOf[root] - first[root] + 1
+			first[root] = min(first[root], track[list[i]])
+			last[root] = max(last[root], track[list[i]])
+		}
+		for i := 0; i < count; i++ {
+			root := find(i)
+			levels[list[i]] = last[root] - first[root] + 1
 			if curved {
-				track[k] -= first[root]
+				track[list[i]] -= first[root]
 			}
 		}
-		return len(rows)
+		return rows
 	}
 
-	// The least distance between a and b as plain curves across a gap that leaves them `height`
-	// to turn in: between points along each and the other drawn as a run of short lines.
-	const samples = 16
 	sample := func(k int, h float64, out []float64) {
 		c := Ease(to[k]-from[k], h)
 		for i := 0; i <= samples; i++ {
@@ -1937,8 +2191,9 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 	}
 	lineA := make([]float64, 2*samples+2)
 	lineB := make([]float64, 2*samples+2)
-	reach := func(points, line []float64) float64 {
-		least := math.Inf(1)
+	reaches := func(points, line []float64, limit float64) bool {
+		// Allow rounding error in the cheap distance check before calling Math.hypot.
+		bound := limit * limit * (1 + 1e-9)
 		for i := 0; i <= samples; i++ {
 			px := points[2*i]
 			py := points[2*i+1]
@@ -1950,19 +2205,20 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 					den = 1
 				}
 				t := max(0, min(1, (float64((px-line[2*j])*dx)+float64((py-line[2*j+1])*dy))/den))
-				d := jsmath.Hypot(px-line[2*j]-float64(t*dx), py-line[2*j+1]-float64(t*dy))
-				if d < least {
-					least = d
+				ex := px - line[2*j] - float64(t*dx)
+				ey := py - line[2*j+1] - float64(t*dy)
+				if float64(ex*ex)+float64(ey*ey) < bound && jsmath.Hypot(ex, ey) < limit {
+					return true
 				}
 			}
 		}
-		return least
+		return false
 	}
-	nearest := func(a, b int, height float64) float64 {
+	near := func(a, b int, height, limit float64) bool {
 		h := max(float64(height/2), height-2*levelLead)
 		sample(a, h, lineA)
 		sample(b, h, lineB)
-		return min(reach(lineA, lineB), reach(lineB, lineA))
+		return reaches(lineA, lineB, limit) || reaches(lineB, lineA, limit)
 	}
 
 	for r, all := range byRank.All() {
@@ -1990,22 +2246,20 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 				level.Add(k)
 			}
 		}
-		for i := range all {
-			checkCancel(ctx)
-			for j := i + 1; j < len(all); j++ {
-				a := all[i]
-				b := all[j]
-				if (level.Has(a) && level.Has(b)) || !clash(a, b) || (from[a] < to[a]) != (from[b] < to[b]) {
-					continue
-				}
-				limit := float64(levelTouch)
-				if wide[a] == 1 || wide[b] == 1 {
-					limit = levelClear
-				}
-				if nearest(a, b, room[r]) < limit {
-					level.Add(a)
-					level.Add(b)
-				}
+		pairs := nearPairs(all)
+		for p := 0; p < len(pairs); p += 2 {
+			a := all[pairs[p]]
+			b := all[pairs[p+1]]
+			if (level.Has(a) && level.Has(b)) || !clash(a, b) || (from[a] < to[a]) != (from[b] < to[b]) {
+				continue
+			}
+			limit := float64(levelTouch)
+			if wide[a] == 1 || wide[b] == 1 {
+				limit = levelClear
+			}
+			if near(a, b, room[r], limit) {
+				level.Add(a)
+				level.Add(b)
 			}
 		}
 		for _, k := range far {
@@ -2017,11 +2271,11 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 		}
 		crossing := 0
 		alongside := 0
-		turning := slices.Collect(level.All())
-		for i := range turning {
-			for j := i + 1; j < len(turning); j++ {
-				a := turning[i]
-				b := turning[j]
+		var beside omap.Set[int]
+		for p := 0; p < len(pairs); p += 2 {
+			a := all[pairs[p]]
+			b := all[pairs[p+1]]
+			if level.Has(a) && level.Has(b) {
 				if !overlap(a, b) {
 					continue
 				}
@@ -2030,6 +2284,9 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 				} else if !mates(a, b) {
 					alongside++
 				}
+			} else if (level.Has(a) || level.Has(b)) && meet(a, b) {
+				beside.Add(a)
+				beside.Add(b)
 			}
 		}
 		if crossing > alongside {
@@ -2042,17 +2299,9 @@ func assignTracks(ctx context.Context, pc *pieces, trackCount []int, curved bool
 		}
 		// With them go the short pieces that could cross one of them, so that each has its place
 		// among the levels and crosses none.
-		beside := func(k int) bool {
-			for j := range level.All() {
-				if meet(k, j) {
-					return true
-				}
-			}
-			return false
-		}
 		members := []int{}
 		for _, k := range all {
-			if level.Has(k) || (wide[k] != 1 && beside(k)) {
+			if level.Has(k) || (wide[k] != 1 && beside.Has(k)) {
 				members = append(members, k)
 			}
 		}
@@ -2221,17 +2470,57 @@ func pastLabels(ctx context.Context, g *graph, xs []float64, firstDummy, span []
 	}
 }
 
-func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
+// reduceCrossings returns the final crossings and the crossings before grouping or reordering.
+func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) (int, int) {
 	n, real, maxRank, W, EF, ET, EFD, ETD := g.n, g.real, g.maxRank, g.W, g.EF, g.ET, g.EFD, g.ETD
 	succStart, succE, predStart, predE, layerStart, order, pos, offsets := g.succStart, g.succE, g.predStart, g.predE, g.layerStart, g.order, g.pos, g.offsets
+	fixed, GRP, groupParent := g.fixed, g.GRP, g.groupParent
 	widest := 0
 	for r := 0; r <= maxRank; r++ {
 		widest = max(widest, layerStart[r+1]-layerStart[r])
+	}
+	if widest < 2 {
+		return 0, 0
 	}
 	// With offsets, edges that reach one node at different offsets take separate places along it.
 	var place []int
 	if offsets {
 		place = make([]int, len(EF))
+	}
+	// Local offset indices and counts do not depend on node order.
+	var placeIn, places []int
+	var mixed []uint8
+	leaving := succE
+	if place != nil {
+		placeIn = make([]int, len(EF))
+		places = make([]int, n)
+		mixed = make([]uint8, n)
+		leaving = slices.Clone(succE)
+		arriving := slices.Clone(predE)
+		byOffset := func(list []int, from, to int, dx []float64) bool {
+			for k := from + 1; k < to; k++ {
+				if dx[list[k]] == dx[list[from]] {
+					continue
+				}
+				slices.SortStableFunc(list[from:to], func(a, b int) int { return sign(dx[a] - dx[b]) })
+				return true
+			}
+			return false
+		}
+		for v := 0; v < n; v++ {
+			places[v] = 1
+			if byOffset(arriving, predStart[v], predStart[v+1], ETD) {
+				for k := predStart[v] + 1; k < predStart[v+1]; k++ {
+					if ETD[arriving[k]] != ETD[arriving[k-1]] {
+						places[v]++
+					}
+					placeIn[arriving[k]] = places[v] - 1
+				}
+			}
+			if byOffset(leaving, succStart[v], succStart[v+1], EFD) {
+				mixed[v] = 1
+			}
+		}
 	}
 	size := 1
 	limit := widest
@@ -2243,40 +2532,21 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 	}
 	tree := make([]int, 2*size)
 	targets := make([]int, len(EF))
-	ids := []int{}
 
 	count := func() int {
 		total := 0
 		for r := 0; r < maxRank; r++ {
 			southLen := layerStart[r+2] - layerStart[r+1]
 			if place != nil {
-				places := 0
+				next := 0
 				for i := layerStart[r+1]; i < layerStart[r+2]; i++ {
-					from := predStart[order[i]]
-					to := predStart[order[i]+1]
-					mixed := false
-					for k := from + 1; k < to; k++ {
-						if ETD[predE[k]] != ETD[predE[from]] {
-							mixed = true
-						}
+					v := order[i]
+					for k := predStart[v]; k < predStart[v+1]; k++ {
+						place[predE[k]] = next + placeIn[predE[k]]
 					}
-					if mixed {
-						ids = append(ids[:0], predE[from:to]...)
-						slices.SortStableFunc(ids, func(a, b int) int { return sign(ETD[a] - ETD[b]) })
-						for k := range ids {
-							if k > 0 && ETD[ids[k]] != ETD[ids[k-1]] {
-								places++
-							}
-							place[ids[k]] = places
-						}
-					} else {
-						for k := from; k < to; k++ {
-							place[predE[k]] = places
-						}
-					}
-					places++
+					next += places[v]
 				}
-				southLen = places
+				southLen = next
 			}
 			if southLen < 2 {
 				continue
@@ -2289,7 +2559,7 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 				t0 := t
 				for k := from; k < to; k++ {
 					if place != nil {
-						targets[t] = place[succE[k]]
+						targets[t] = place[leaving[k]]
 					} else {
 						targets[t] = pos[ET[succE[k]]]
 					}
@@ -2299,24 +2569,17 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 				if d < 2 {
 					continue
 				}
-				mixed := false
-				if place != nil {
-					for k := from + 1; k < to; k++ {
-						if EFD[succE[k]] != EFD[succE[from]] {
-							mixed = true
+				if place != nil && mixed[v] != 0 {
+					// Sort equal-offset edges by destination to avoid counting shared endpoints as crossings.
+					for a := t0 + 1; a < t; a++ {
+						item := targets[a]
+						dx := EFD[leaving[from+a-t0]]
+						b := a - 1
+						for b >= t0 && EFD[leaving[from+b-t0]] == dx && targets[b] > item {
+							targets[b+1] = targets[b]
+							b--
 						}
-					}
-				}
-				if place != nil && mixed {
-					ids = append(ids[:0], succE[from:to]...)
-					slices.SortStableFunc(ids, func(a, b int) int {
-						if c := sign(EFD[a] - EFD[b]); c != 0 {
-							return c
-						}
-						return place[a] - place[b]
-					})
-					for k := 0; k < d; k++ {
-						targets[t0+k] = place[ids[k]]
+						targets[b+1] = item
 					}
 				} else if d <= 12 {
 					for a := t0 + 1; a < t; a++ {
@@ -2355,25 +2618,112 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 		return total
 	}
 
-	best := count()
-	if best == 0 {
-		return
-	}
-	bestOrder := slices.Clone(order)
+	declared := count()
 	bary := make([]float64, n)
 	moving := make([]int, widest)
-	leftBias := func(a, b int) int {
-		if c := sign(bary[a] - bary[b]); c != 0 {
-			return c
+	spare := make([]int, widest)
+
+	// Keep groups contiguous, ordering each by its mean key.
+	groups := len(groupParent)
+	depth := make([]int, groups)
+	for gr := 0; gr < groups; gr++ {
+		for p := gr; p >= 0; p = groupParent[p] {
+			depth[gr]++
 		}
-		return pos[a] - pos[b]
 	}
-	rightBias := func(a, b int) int {
-		if c := sign(bary[a] - bary[b]); c != 0 {
-			return c
+	groupSum := make([]float64, groups)
+	groupCount := make([]int, groups)
+	groupFirst := make([]int, groups)
+	arrange := func(r int, key []float64) {
+		s := layerStart[r]
+		e := layerStart[r+1]
+		for i := s; i < e; i++ {
+			for gr := GRP[order[i]]; gr >= 0; gr = groupParent[gr] {
+				groupSum[gr] = 0
+				groupCount[gr] = 0
+			}
 		}
-		return pos[b] - pos[a]
+		for i := s; i < e; i++ {
+			v := order[i]
+			for gr := GRP[v]; gr >= 0; gr = groupParent[gr] {
+				if groupCount[gr] == 0 {
+					groupFirst[gr] = i
+				}
+				groupSum[gr] += key[v]
+				groupCount[gr]++
+			}
+		}
+		// Compare siblings in their nearest common group; group items use n + group ID.
+		value := func(item int) float64 {
+			if item >= n {
+				return groupSum[item-n] / float64(groupCount[item-n])
+			}
+			return key[item]
+		}
+		first := func(item int) int {
+			if item >= n {
+				return groupFirst[item-n]
+			}
+			return s + pos[item]
+		}
+		compare := func(a, b int) int {
+			ia := a
+			ib := b
+			ca := GRP[a]
+			cb := GRP[b]
+			da := 0
+			if ca >= 0 {
+				da = depth[ca]
+			}
+			db := 0
+			if cb >= 0 {
+				db = depth[cb]
+			}
+			for ; da > db; da-- {
+				ia = n + ca
+				ca = groupParent[ca]
+			}
+			for ; db > da; db-- {
+				ib = n + cb
+				cb = groupParent[cb]
+			}
+			for ca != cb {
+				ia = n + ca
+				ca = groupParent[ca]
+				ib = n + cb
+				cb = groupParent[cb]
+			}
+			if c := sign(value(ia) - value(ib)); c != 0 {
+				return c
+			}
+			return first(ia) - first(ib)
+		}
+		row := slices.Clone(order[s:e])
+		slices.SortStableFunc(row, compare)
+		copy(order[s:], row)
+		for i := s; i < e; i++ {
+			pos[order[i]] = i - s
+		}
 	}
+	if GRP != nil {
+		at := make([]float64, n)
+		for r := 0; r <= maxRank; r++ {
+			for i := layerStart[r]; i < layerStart[r+1]; i++ {
+				at[order[i]] = float64(i - layerStart[r])
+			}
+			arrange(r, at)
+		}
+	}
+	best := declared
+	if GRP != nil {
+		best = count()
+	}
+	if best == 0 {
+		return 0, declared
+	}
+	bestOrder := slices.Clone(order)
+	// Require improvements over both the grouped and ungrouped starting orders.
+	start := min(best, declared)
 
 	sweep := func(down, biasRight bool) {
 		start, list, other, otherDx := succStart, succE, ET, ETD
@@ -2384,6 +2734,9 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 			r := maxRank - step
 			if down {
 				r = step
+			}
+			if fixed[r] != 0 {
+				continue
 			}
 			s := layerStart[r]
 			e := layerStart[r+1]
@@ -2403,6 +2756,15 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 				from := start[v]
 				to := start[v+1]
 				if from == to {
+					if GRP != nil {
+						// Preserve relative position when there are no neighbours in the adjacent rank.
+						across := layerStart[r+2] - layerStart[r+1]
+						if down {
+							across = layerStart[r] - layerStart[r-1]
+						}
+						bary[v] = float64((i-s)*across) / float64(e-s)
+						continue
+					}
 					bary[v] = -1
 					continue
 				}
@@ -2418,14 +2780,14 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 				moving[movable] = v
 				movable++
 			}
+			if GRP != nil {
+				arrange(r, bary)
+				continue
+			}
 			if movable < 2 {
 				continue
 			}
-			if biasRight {
-				slices.SortStableFunc(moving[:movable], rightBias)
-			} else {
-				slices.SortStableFunc(moving[:movable], leftBias)
-			}
+			sortByBary(moving, movable, bary, pos, biasRight, spare)
 			k := 0
 			for i := s; i < e; i++ {
 				if bary[order[i]] != -1 {
@@ -2464,12 +2826,82 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 		}
 	}
 
+	// Adjacent swaps can remove crossings missed by barycenter sweeps.
+	pinOf := func(v int) float64 {
+		if v < real {
+			return nodes[v].Pin
+		}
+		return 0
+	}
+	at := func(e int, up bool) float64 {
+		u := ET[e]
+		dx := ETD[e]
+		if up {
+			u = EF[e]
+			dx = EFD[e]
+		}
+		if offsets && W[u] > 0 {
+			return float64(pos[u]) + dx/W[u]
+		}
+		return float64(pos[u])
+	}
+	// Crossings between a and b, assuming a is left of b.
+	between := func(a, b int) int {
+		c := 0
+		for k := predStart[a]; k < predStart[a+1]; k++ {
+			x := at(predE[k], true)
+			for j := predStart[b]; j < predStart[b+1]; j++ {
+				if x > at(predE[j], true) {
+					c++
+				}
+			}
+		}
+		for k := succStart[a]; k < succStart[a+1]; k++ {
+			x := at(succE[k], false)
+			for j := succStart[b]; j < succStart[b+1]; j++ {
+				if x > at(succE[j], false) {
+					c++
+				}
+			}
+		}
+		return c
+	}
+	transpose := func() {
+		for pass := 0; pass < 8; pass++ {
+			checkCancel(ctx)
+			improved := false
+			for r := 0; r <= maxRank; r++ {
+				if fixed[r] != 0 {
+					continue
+				}
+				s := layerStart[r]
+				for i := s; i+1 < layerStart[r+1]; i++ {
+					a := order[i]
+					b := order[i+1]
+					if pinOf(a) != pinOf(b) || (GRP != nil && GRP[a] != GRP[b]) {
+						continue
+					}
+					if between(b, a) >= between(a, b) {
+						continue
+					}
+					order[i] = b
+					order[i+1] = a
+					pos[b] = i - s
+					pos[a] = i + 1 - s
+					improved = true
+				}
+			}
+			if !improved {
+				break
+			}
+		}
+	}
+
 	// The sweeps are run twice from the same start, going down first and going up first. They
 	// often end with as few crossings either way but a different order, and then the one that
 	// keeps more of the nodes in the order they were given is the less surprising.
 	// Only for graphs small enough to be read node by node: a second run costs as much as the first.
 	initial := slices.Clone(order)
-	start := best
 	small := n <= 600
 	chosen := bestOrder
 	chosenOut := math.MaxInt
@@ -2498,6 +2930,15 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 			}
 		}
 		copy(order, foundOrder)
+		if small && found > 0 {
+			settlePositions()
+			transpose()
+			c := count()
+			if c < found {
+				found = c
+				copy(foundOrder, order)
+			}
+		}
 		out := 0
 		if small {
 			out = outOfOrder()
@@ -2511,18 +2952,22 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 	copy(order, chosen)
 	settlePositions()
 	copy(bestOrder, chosen)
+	// The retained grouped order may exceed the ungrouped threshold; recount it.
+	if GRP != nil {
+		best = count()
+	}
 
 	// A drawing and its mirror image cross as often too. Of those two, likewise.
 	if !small {
-		return
+		return best, declared
 	}
 	for i := 0; i < real; i++ {
 		if nodes[i].Pin != 0 {
-			return
+			return best, declared
 		}
 	}
-	if chosenOut == 0 {
-		return
+	if chosenOut == 0 || fixed[0] != 0 || fixed[maxRank] != 0 {
+		return best, declared
 	}
 	for r := 0; r <= maxRank; r++ {
 		slices.Reverse(order[layerStart[r]:layerStart[r+1]])
@@ -2531,6 +2976,7 @@ func reduceCrossings(ctx context.Context, g *graph, nodes []LNode) {
 	if count() > best || outOfOrder() >= chosenOut {
 		copy(order, bestOrder)
 	}
+	return best, declared
 }
 
 // halfRoom is half the room a node, bend or port takes across the flow, with its share of the

@@ -12,6 +12,19 @@ import { vi } from 'vitest';
 // The instant a render with no `now` is given, so gantt output does not depend on when the
 // suite ran.
 const FIXED_NOW = Date.UTC(2026, 9, 20, 9, 30);
+
+// A render given an invalid `now` reads the clock instead. Stopping it at FIXED_NOW during
+// the call keeps those outcomes the same however and whenever the suite runs.
+function atFixedNow(run) {
+  const clock = Date.now;
+  Date.now = () => FIXED_NOW;
+  try {
+    return run();
+  } finally {
+    Date.now = clock;
+  }
+}
+
 const out = `${process.env.PELE_CAPTURE_DIR}/capture-${process.pid}-${threadId}.jsonl`;
 
 const units = (s) => Array.from({ length: s.length }, (_, i) => s.charCodeAt(i));
@@ -61,6 +74,16 @@ function encode(value) {
   throw new Unserializable(typeof value);
 }
 
+function mathRecord(table) {
+  if (table === undefined) return {};
+  try {
+    return { math: encode(Object.assign({}, table)) };
+  } catch (e) {
+    if (e instanceof Unserializable) return { unsupported: `math answer of type ${e.message}` };
+    throw e;
+  }
+}
+
 function write(record) {
   appendFileSync(out, JSON.stringify(record) + '\n');
 }
@@ -73,14 +96,14 @@ vi.mock('../../src/core.js', async (importOriginal) => {
   // Splits options into what JSON can carry and how the measurer was chosen. Returns null
   // when something cannot be replayed.
   function describe(options) {
-    const { measurer, icons, now, ...rest } = options ?? {};
+    const { measurer, icons, math, now, ...rest } = options ?? {};
     let kind = 'default';
     if (measurer === metricsMeasurer) kind = 'metrics';
     else if (measurer !== undefined) return { unsupported: 'custom measurer' };
     try {
       const encoded = encode(rest);
       if (now !== undefined) encoded.now = now instanceof Date ? now.getTime() : now;
-      return { options: encoded, measurer: kind, icons: icons !== undefined };
+      return { options: encoded, measurer: kind, icons: icons !== undefined, ...(math !== undefined && { mathResolver: true }) };
     } catch (e) {
       if (e instanceof Unserializable) return { unsupported: `option of type ${e.message}` };
       throw e;
@@ -90,7 +113,7 @@ vi.mock('../../src/core.js', async (importOriginal) => {
   function parse(text, options) {
     const record = { call: 'parse', src: text, ...describe(options) };
     try {
-      const model = mod.parse(text, options);
+      const model = atFixedNow(() => mod.parse(text, options));
       fromParse.set(model, { src: text, ...describe(options) });
       write({ ...record, outcome: 'ok' });
       return model;
@@ -114,17 +137,30 @@ vi.mock('../../src/core.js', async (importOriginal) => {
         return answer;
       };
     }
+    // TeX the render asks the math resolver for, keyed as upstream caches it (size, newline,
+    // TeX), with the host's answers. Upstream asks once per key per render, so the table
+    // answers every question the replay asks.
+    let mathTable;
+    if (typeof opts.math === 'function') {
+      const host = opts.math;
+      mathTable = Object.create(null);
+      opts.math = (tex, size) => {
+        const answer = host(tex, size);
+        mathTable[size + '\n' + tex] = answer ?? null;
+        return answer;
+      };
+    }
     let record;
     if (typeof source === 'string') record = { call: 'render', src: source, ...describe(opts) };
     else if (fromParse.has(source)) record = { call: 'render-model', parse: fromParse.get(source), ...describe(opts) };
     else record = { call: 'render-foreign', unsupported: 'model not returned by parse' };
     try {
-      const result = mod.render(source, opts);
-      write({ ...record, icons: iconTable, outcome: hash(outcomeText(result, null)) });
+      const result = atFixedNow(() => mod.render(source, opts));
+      write({ ...record, icons: iconTable, ...mathRecord(mathTable), outcome: hash(outcomeText(result, null)) });
       return result;
     } catch (error) {
       const outcome = error && error.name === 'PeleError' ? hash(outcomeText(null, error)) : `thrown: ${error && error.name}`;
-      write({ ...record, icons: iconTable, outcome });
+      write({ ...record, icons: iconTable, ...mathRecord(mathTable), outcome });
       throw error;
     }
   }

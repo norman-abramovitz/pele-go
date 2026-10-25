@@ -36,7 +36,7 @@ type group struct {
 }
 
 func box(x, y, w, h float64, attrs string) string {
-	return `<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `"` + attrs + `/>`
+	return `<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `"` + svg.Rounded(attrs) + `/>`
 }
 
 func renderTimeline(model *timelineDb, config *jsobj.Object, rc *core.Context) core.Rendered {
@@ -256,11 +256,16 @@ func draw(model *timelineDb, config *jsobj.Object, rc *core.Context, vertical bo
 			for _, i := range g.periods {
 				color := colorOf(g, i)
 				h := chipHeight(periodLabels[i])
-				cy := y + float64(h/2)
+				// A period and its first event share one center line, so the line between them runs straight.
+				first := h
+				if len(eventLabels[i]) > 0 {
+					first = eventHeight(eventLabels[i][0])
+				}
+				cy := y + float64(max(h, first)/2)
 				var d strings.Builder
 				d.WriteString("M" + svg.Num(left+colW) + "," + svg.Num(cy) + "H" + svg.Num(axisX))
 				var cards strings.Builder
-				ey := y
+				ey := cy - float64(first/2)
 				last := cy
 				for _, label := range eventLabels[i] {
 					eh := eventHeight(label)
@@ -273,12 +278,12 @@ func draw(model *timelineDb, config *jsobj.Object, rc *core.Context, vertical bo
 					d.WriteString("M" + svg.Num(axisX) + "," + svg.Num(cy) + "H" + svg.Num(spineX) + "V" + svg.Num(last))
 				}
 				body.WriteString(openPeriod(i) +
-					period(i, color, left, y, h) +
+					period(i, color, left, cy-float64(h/2), h) +
 					`<path class="pele-edge" d="` + d.String() + `"` + line + `/>` +
 					dot(axisX, cy, color) +
 					cards.String() +
 					`</g>`)
-				y = max(y+h, ey-eventGap) + gap
+				y = max(cy+float64(h/2), ey-eventGap) + gap
 			}
 			if len(g.periods) == 0 {
 				y += gap - sectionGap - 4

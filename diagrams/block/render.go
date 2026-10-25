@@ -710,7 +710,7 @@ func draw(model *blockDb, config *jsobj.Object, rc *core.Context, tight bool) co
 	if model.title != nil {
 		titleText = *model.title
 	}
-	title := text.Layout(titleText, false, measurer, size, titleRoom, text.Bold, icons)
+	title := svg.TitleLabel(titleText, measurer, size, titleRoom, icons)
 	titleHeight := 0.0
 	if title.Height > 0 {
 		titleHeight = title.Height + 12
@@ -736,7 +736,7 @@ func draw(model *blockDb, config *jsobj.Object, rc *core.Context, tight bool) co
 			top := v.y - float64(v.h/2)
 			clusters.WriteString(`<g class="pele-cluster` + classes + `" data-id="` + id + `">` +
 				`<rect x="` + svg.Num(v.x-float64(v.w/2)) + `" y="` + svg.Num(top) + `" width="` + svg.Num(v.w) + `" height="` + svg.Num(v.h) +
-				`" rx="` + svg.Radius + `" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + v.style.Shape + `/>` +
+				`" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + svg.Rounded(v.style.Shape) + `/>` +
 				svg.LabelSVG(v.label, v.x, top+float64((v.head+gap)/2)+2, ` class="pele-cluster-label" fill="var(--_m)"`+v.style.Text, icons) +
 				`</g>`)
 			continue

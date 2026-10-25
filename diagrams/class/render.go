@@ -57,7 +57,7 @@ type view struct {
 	style       svg.ResolvedStyle
 	label       text.Label
 	w, h        float64
-	annotations []string
+	annotations []annotation
 	attributes  []line
 	methods     []line
 	titleH      float64
@@ -78,7 +78,14 @@ type end struct {
 
 type card struct {
 	text string
+	math *text.Label
 	x, y float64
+}
+
+// annotation is an annotation's text, or its label when it holds typeset math.
+type annotation struct {
+	text string
+	math *text.Label
 }
 
 func memberLine(member *classMember, measurer text.Measurer, size float64) line {
@@ -136,6 +143,26 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 		rootDir = layout.Direction(db.direction)
 	}
 	icons := rc.Icons
+	// Keep annotations and cardinalities literal unless math is typeset.
+	mathText := func(raw string, fontSize float64) *text.Label {
+		if !strings.Contains(raw, "$$") {
+			return nil
+		}
+		label := text.Layout(raw, false, measurer, fontSize, 4000, 0, icons)
+		if slices.ContainsFunc(label.Lines, text.HasMath) {
+			return &label
+		}
+		return nil
+	}
+	cardWidth := func(raw string) float64 {
+		if raw == "" {
+			return 0
+		}
+		if math := mathText(raw, tiny); math != nil {
+			return math.Width
+		}
+		return measurer.Width(text.DecodeEntities(raw), tiny, 0)
+	}
 
 	// A class may carry the declarations of many classDefs many times over. Each distinct
 	// declaration is checked once, and only the last value of each property that has an
@@ -247,9 +274,13 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 			labelStyle |= text.Italic
 		}
 		label := text.Layout(cls.label+generic, false, measurer, fontSize, 4000, labelStyle, icons)
-		var annotations []string
+		var annotations []annotation
 		for _, a := range cls.annotations {
-			annotations = append(annotations, "«"+jsstr.Trim(text.DecodeEntities(a))+"»")
+			if math := mathText("«"+jsstr.Trim(a)+"»", tiny); math != nil {
+				annotations = append(annotations, annotation{math: math})
+			} else {
+				annotations = append(annotations, annotation{text: "«" + jsstr.Trim(text.DecodeEntities(a)) + "»"})
+			}
 		}
 		var attributes, methods []line
 		for _, m := range cls.members {
@@ -259,8 +290,15 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 			methods = append(methods, memberLine(m, measurer, memberSize))
 		}
 		inner := label.Width
+		annotationsH := 0.0
 		for _, a := range annotations {
-			inner = max(inner, measurer.Width(a, tiny, 0))
+			if a.math == nil {
+				inner = max(inner, measurer.Width(a.text, tiny, 0))
+				annotationsH += tinyHeight
+			} else {
+				inner = max(inner, a.math.Width)
+				annotationsH += max(tinyHeight, a.math.Height)
+			}
 		}
 		for _, l := range attributes {
 			inner = max(inner, l.width)
@@ -278,7 +316,7 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 			}
 			return emptySection
 		}
-		titleH := 2*titlePad + float64(float64(len(annotations))*tinyHeight) + max(label.Height, jsmath.Round(fontSize*1.5))
+		titleH := 2*titlePad + annotationsH + max(label.Height, jsmath.Round(fontSize*1.5))
 		attributesH := section(len(attributes))
 		return &view{
 			node:        node,
@@ -358,13 +396,8 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 			continue
 		}
 		label := text.Layout(edge.label, true, measurer, small, 200, 0, icons)
-		startW, endW := 0.0, 0.0
-		if edge.startLabelRight != "" {
-			startW = measurer.Width(text.DecodeEntities(edge.startLabelRight), tiny, 0)
-		}
-		if edge.endLabelLeft != "" {
-			endW = measurer.Width(text.DecodeEntities(edge.endLabelLeft), tiny, 0)
-		}
+		startW := cardWidth(edge.startLabelRight)
+		endW := cardWidth(edge.endLabelLeft)
 		labelW, labelH := 0.0, 0.0
 		if label.Width > 0 {
 			labelW = label.Width + 12
@@ -418,10 +451,27 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 	if lettered {
 		rankDefault = rankSep + 16
 	}
+	// Cardinalities at both ends of a vertical edge need room for their height between the ranks.
+	tallCards := 0.0
+	if rootDir == layout.TB || rootDir == layout.BT {
+		cardHeight := func(raw string) float64 {
+			if raw == "" {
+				return 0
+			}
+			h := 0.0
+			if math := mathText(raw, tiny); math != nil {
+				h = math.Height
+			}
+			return max(tinyHeight, h)
+		}
+		for _, edge := range drawn {
+			tallCards = max(tallCards, cardHeight(edge.startLabelRight)+cardHeight(edge.endLabelLeft)-2*tinyHeight)
+		}
+	}
 	lay := layout.CompoundLayout(rc.Ctx, cnodes, cedges, rootDir, layout.LayeredOptions{
 		NodeSep: numberOption(conf, "nodeSpacing", nodeSep),
 		EdgeSep: edgeSep,
-		RankSep: numberOption(conf, "rankSpacing", rankDefault),
+		RankSep: numberOption(conf, "rankSpacing", rankDefault) + tallCards,
 		PortSep: 20,
 		Apart:   true,
 	})
@@ -612,9 +662,14 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 		if raw == "" {
 			return
 		}
+		math := mathText(raw, tiny)
+		h := tinyHeight
+		if math != nil {
+			h = max(tinyHeight, math.Height)
+		}
 		cx, cy := x, y
 		halfW := float64(width / 2)
-		halfT := float64(tinyHeight / 2)
+		halfT := float64(h / 2)
 		if side&1 == 1 {
 			if side == 3 {
 				cx -= 5 + halfW
@@ -638,7 +693,7 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 				cy += 3 + halfT
 			}
 		}
-		cards = append(cards, card{text: text.DecodeEntities(raw), x: cx, y: cy})
+		cards = append(cards, card{text: text.DecodeEntities(raw), math: math, x: cx, y: cy})
 		minX = min(minX, cx-halfW)
 		maxX = max(maxX, cx+halfW)
 		minY = min(minY, cy-halfT)
@@ -697,7 +752,7 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 		top := float64(-h / 2)
 		memberSize := jsmath.Round(v.fontSize * 0.875)
 		lineHeight := jsmath.Round(memberSize * 1.5)
-		body := `<rect x="` + num(left) + `" y="` + num(top) + `" width="` + num(w) + `" height="` + num(h) + `" rx="` + svg.Radius + `" fill="var(--_s)" stroke="var(--_b)"` + style.Shape + `/>`
+		body := `<rect x="` + num(left) + `" y="` + num(top) + `" width="` + num(w) + `" height="` + num(h) + `" fill="var(--_s)" stroke="var(--_b)"` + svg.Rounded(style.Shape) + `/>`
 		first := top + v.titleH
 		second := first + v.attributesH
 		if h > v.titleH {
@@ -709,8 +764,14 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 		}
 		y := top + titlePad
 		for _, annotation := range v.annotations {
-			body += `<text class="pele-annotation" x="0" y="` + num(y+float64(tinyHeight/2)+float64(tiny*0.35)) + `" text-anchor="middle" font-size="` + jsnum.Format(tiny) + `" fill="var(--_m)">` + svg.Esc(annotation) + `</text>`
-			y += tinyHeight
+			if annotation.math == nil {
+				body += `<text class="pele-annotation" x="0" y="` + num(y+float64(tinyHeight/2)+float64(tiny*0.35)) + `" text-anchor="middle" font-size="` + jsnum.Format(tiny) + `" fill="var(--_m)">` + svg.Esc(annotation.text) + `</text>`
+				y += tinyHeight
+			} else {
+				h := max(tinyHeight, annotation.math.Height)
+				body += svg.LabelSVG(*annotation.math, 0, y+float64(h/2), ` class="pele-annotation" font-size="`+jsnum.Format(tiny)+`" fill="var(--_m)"`, icons)
+				y += h
+			}
 		}
 		titleSize := ""
 		if v.fontSize != size {
@@ -779,7 +840,7 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 				struckTitles.WriteString(svg.StruckTitle(v.label, titleX+ox, titleY, titleAttrs, id, parentOf, i, nil))
 			}
 			clusters.WriteString(`<g class="pele-cluster pele-namespace" data-id="` + id + `">` +
-				`<rect x="` + num(x-float64(w/2)) + `" y="` + num(y-float64(h/2)) + `" width="` + num(w) + `" height="` + num(h) + `" rx="` + svg.Radius + `" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"/>`)
+				`<rect x="` + num(x-float64(w/2)) + `" y="` + num(y-float64(h/2)) + `" width="` + num(w) + `" height="` + num(h) + `" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + svg.RoundedStyle + `/>`)
 			if !struck {
 				clusters.WriteString(svg.LabelSVG(v.label, titleX+ox, titleY, titleAttrs, nil))
 			}
@@ -862,7 +923,11 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 
 	var cardsOut strings.Builder
 	for _, item := range cards {
-		cardsOut.WriteString(`<text class="pele-cardinality" x="` + num(item.x+ox) + `" y="` + num(item.y+oy+float64(tiny*0.35)) + `" text-anchor="middle">` + svg.Esc(item.text) + `</text>`)
+		if item.math != nil {
+			cardsOut.WriteString(svg.LabelSVG(*item.math, item.x+ox, item.y+oy, ` class="pele-cardinality"`, icons))
+		} else {
+			cardsOut.WriteString(`<text class="pele-cardinality" x="` + num(item.x+ox) + `" y="` + num(item.y+oy+float64(tiny*0.35)) + `" text-anchor="middle">` + svg.Esc(item.text) + `</text>`)
+		}
 	}
 
 	var content strings.Builder

@@ -262,7 +262,7 @@ func draw(model *journeyDb, rc *core.Context, down bool) core.Rendered {
 					`<title>` + svg.EscText(name) + `</title></circle>`)
 			}
 			cards = append(cards, `<g class="pele-node pele-task" data-id="`+svg.EscText(jsstr.Trim(task.task))+`">`+
-				`<rect x="`+svg.Num(x)+`" y="`+svg.Num(cardsY)+`" width="`+svg.Num(cardW)+`" height="`+svg.Num(cardH)+`" rx="`+svg.Radius+`" fill="var(--_s)" stroke="var(--_b)"/>`+
+				`<rect x="`+svg.Num(x)+`" y="`+svg.Num(cardsY)+`" width="`+svg.Num(cardW)+`" height="`+svg.Num(cardH)+`" fill="var(--_s)" stroke="var(--_b)"`+svg.RoundedStyle+`/>`+
 				svg.LabelSVG(labels[i], cx, cardsY+padY+float64(textH/2), ` font-size="`+jsnum.Format(small)+`"`, nil)+
 				dots.String()+
 				`</g>`)
@@ -285,7 +285,7 @@ func draw(model *journeyDb, rc *core.Context, down bool) core.Rendered {
 			x := left + float64(float64(r.start)*pitch)
 			w := float64(float64(r.count)*pitch) - gap
 			body.WriteString(`<g class="pele-cluster pele-section" data-id="` + svg.EscText(jsstr.Trim(tasks[r.start].section)) + `">` +
-				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(top) + `" width="` + svg.Num(w) + `" height="` + svg.Num(bandH) + `" rx="` + svg.Radius + `" fill="var(--_a)"/>` +
+				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(top) + `" width="` + svg.Num(w) + `" height="` + svg.Num(bandH) + `" fill="var(--_a)"` + svg.RoundedStyle + `/>` +
 				svg.LabelSVG(*r.label, x+float64(w/2), top+float64(bandH/2), ` font-size="`+jsnum.Format(small)+`" font-weight="var(--_hw)"`, nil) +
 				members.String() +
 				`</g>`)
@@ -368,7 +368,7 @@ func verticalJourney(model *journeyDb, rc *core.Context) core.Rendered {
 		}
 		w := max(room, label.Width+72)
 		body.WriteString(`<g class="pele-node pele-journey-step" data-id="` + strconv.Itoa(index) + `"><rect x="` + svg.Num(pad) + `" y="` + svg.Num(y) +
-			`" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `" fill="var(--_s)" stroke="var(--_b)"/>`)
+			`" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" fill="var(--_s)" stroke="var(--_b)"` + svg.RoundedStyle + `/>`)
 		body.WriteString(svg.LabelSVG(label, pad+padX+float64(label.Width/2), y+padY+float64(label.Height/2), ` class="pele-label"`, nil))
 		cx := pad + w - 28
 		body.WriteString(face(cx, y+padY+faceR, moodOf(task.score)))

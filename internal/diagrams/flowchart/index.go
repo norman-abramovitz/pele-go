@@ -8,6 +8,7 @@ import (
 // Diagram is the flowchart diagram type.
 var Diagram = &core.Diagram{
 	Type:  "flowchart",
+	Math:  true,
 	Parse: Parse,
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {
 		return RenderFlowchart(m.(*FlowDb), config, rc, nil)

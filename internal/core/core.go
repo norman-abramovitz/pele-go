@@ -52,6 +52,10 @@ type Options struct {
 	// Icons returns SVG markup for an icon name, or "" when the host has none. It must be
 	// safe for concurrent use and must not panic.
 	Icons func(name string) string
+	// Math typesets the TeX of a $$...$$ expression in a label at a font size in pixels, or
+	// returns nil to leave the expression as written. Only the types Mermaid typesets math
+	// in ask it. It must be safe for concurrent use and must not panic.
+	Math func(tex string, size float64) *MathMarkup
 	// Now is the time gantt charts treat as now. The zero time means the current time.
 	Now time.Time
 	// Location is the time zone gantt charts read dates in. Nil means time.Local.
@@ -60,6 +64,10 @@ type Options struct {
 	// directives win over it, key by key at the top level.
 	Config *jsobj.Object
 }
+
+// MathMarkup is typeset math: SVG markup, or HTML markup when HTML is set, which then needs
+// the typesetter's CSS. Width and Height are in pixels and must be positive and finite.
+type MathMarkup = text.MathMarkup
 
 // Link is an element of a rendered diagram that links somewhere.
 type Link struct {
@@ -123,8 +131,10 @@ type Diagram struct {
 	// KeepComments asks for the text with its %% comment lines kept, for a type that
 	// reports source positions.
 	KeepComments bool
-	Parse        func(source string, config *jsobj.Object, title *string, lineOffset int, limits Limits) any
-	Render       func(model any, config *jsobj.Object, rc *Context) Rendered
+	// Math enables $$...$$ in labels.
+	Math   bool
+	Parse  func(source string, config *jsobj.Object, title *string, lineOffset int, limits Limits) any
+	Render func(model any, config *jsobj.Object, rc *Context) Rendered
 }
 
 var (
@@ -366,7 +376,11 @@ func RenderParsed(ctx context.Context, parsed *Parsed, opts Options) (res Result
 	if resolve != nil {
 		icons = func(name string) string { return resolve(text.DecodeEntities(name)) }
 	}
-	rc := &Context{Ctx: ctx, Options: opts, Responsive: responsive, Icons: text.NewIcons(icons)}
+	labelIcons := text.NewIcons(icons)
+	if p.diagram.Math {
+		labelIcons = labelIcons.WithMath(text.NewMath(opts.Math))
+	}
+	rc := &Context{Ctx: ctx, Options: opts, Responsive: responsive, Icons: labelIcons}
 	rc.Options.Responsive = &responsive
 	checkContext(ctx)
 	var rendered Rendered

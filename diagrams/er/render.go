@@ -88,12 +88,22 @@ func textLeft(label text.Label, x, y float64, attrs string, icons *text.Icons) s
 	if len(lines) == 0 {
 		return ""
 	}
-	if len(lines) == 1 && len(lines[0]) == 1 && lines[0][0].Icon == "" && lines[0][0].Style == 0 {
-		return `<text` + attrs + ` x="` + svg.Num(x) + `" y="` + svg.Num(y) + `">` + svg.Esc(lines[0][0].Text) + `</text>`
+	if len(lines) == 1 && len(lines[0]) == 1 {
+		if only := lines[0][0]; only.Icon == "" && only.Math == nil && only.Style == 0 {
+			return `<text` + attrs + ` x="` + svg.Num(x) + `" y="` + svg.Num(y) + `">` + svg.Esc(only.Text) + `</text>`
+		}
 	}
 	shared := svg.SharedStyle(label)
+	shift := float64(label.Size * 0.35)
+	top := y - shift - float64(label.LineHeight/2)
 	var body, extra strings.Builder
-	for _, line := range lines {
+	for i, line := range lines {
+		middle := top + text.LineMiddle(label, i)
+		if text.HasMath(line) {
+			extra.WriteString(svg.LabelSVG(text.LabelLine(label, i), x+float64(label.Widths[i]/2), middle, attrs, icons))
+			continue
+		}
+		y = middle + shift
 		hasIcon := false
 		for _, span := range line {
 			if span.Icon != "" {
@@ -119,7 +129,6 @@ func textLeft(label text.Label, x, y float64, attrs string, icons *text.Icons) s
 			}
 			sx += span.Width
 		}
-		y += label.LineHeight
 	}
 	return `<text` + svg.TextStyle(attrs, shared) + ` xml:space="preserve">` + body.String() + `</text>` + extra.String()
 }
@@ -395,7 +404,7 @@ func draw(db *erDb, config *jsobj.Object, rc *core.Context, turned bool) core.Re
 		layoutWidth = max(layoutWidth, c.X+float64(c.W/2)+markerLength+loopReach*0.75+10+reach)
 	}
 
-	title := text.Layout(db.title, false, measurer, size, 4000, text.Bold, icons)
+	title := svg.TitleLabel(db.title, measurer, size, 4000, icons)
 	titleHeight := 0.0
 	if title.Height > 0 {
 		titleHeight = title.Height + 12
@@ -433,8 +442,8 @@ func draw(db *erDb, config *jsobj.Object, rc *core.Context, turned bool) core.Re
 			y := c.Y - float64(c.H/2)
 			titleX := svg.ClusterTitleX(c, view.label.Width, crossings, groupPad)
 			clusters.WriteString(`<g class="pele-cluster` + classes + `" data-id="` + svg.EscText(node.id) + `">` +
-				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(c.W) + `" height="` + svg.Num(c.H) + `" rx="` + svg.Radius +
-				`" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + view.style.Shape + `/>` +
+				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(c.W) + `" height="` + svg.Num(c.H) +
+				`" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + svg.Rounded(view.style.Shape) + `/>` +
 				svg.LabelSVG(view.label, titleX, y+8+float64(view.label.Height/2), ` class="pele-cluster-label" fill="var(--_m)"`+view.style.Text, icons) +
 				`</g>`)
 			continue
@@ -445,7 +454,7 @@ func draw(db *erDb, config *jsobj.Object, rc *core.Context, turned bool) core.Re
 		x0 := float64(-w / 2)
 		y0 := float64(-h / 2)
 		txt := view.style.Text
-		shape := `x="` + svg.Num(x0) + `" y="` + svg.Num(y0) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `"`
+		shape := `x="` + svg.Num(x0) + `" y="` + svg.Num(y0) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `"`
 		nameY := 0.0
 		if len(view.rows) > 0 {
 			nameY = y0 + float64(view.headH/2)
@@ -470,7 +479,7 @@ func draw(db *erDb, config *jsobj.Object, rc *core.Context, turned bool) core.Re
 
 		var body string
 		if len(view.rows) == 0 {
-			body = `<rect ` + shape + boxAttrs + view.style.Shape + `/>` + name
+			body = `<rect ` + shape + svg.Rounded(boxAttrs+view.style.Shape) + `/>` + name
 		} else {
 			rowLine := jsmath.Round(view.rowSize * 1.5)
 			lineColor := "var(--_b)"
@@ -485,7 +494,7 @@ func draw(db *erDb, config *jsobj.Object, rc *core.Context, turned bool) core.Re
 					if r == len(view.rows)-1 {
 						// The last row follows the box's rounded bottom corners: a rounded rect,
 						// squared off on top.
-						stripes.WriteString(`<rect ` + span + ` y="` + svg.Num(y) + `" height="` + svg.Num(rw.h) + `" rx="` + svg.Radius + `"/>` +
+						stripes.WriteString(`<rect ` + span + ` y="` + svg.Num(y) + `" height="` + svg.Num(rw.h) + `"` + svg.RoundedStyle + `/>` +
 							`<rect ` + span + ` y="` + svg.Num(y) + `" height="` + svg.Num(rw.h/2) + `"/>`)
 					} else {
 						stripes.WriteString(`<rect ` + span + ` y="` + svg.Num(y) + `" height="` + svg.Num(rw.h) + `"/>`)
@@ -504,12 +513,12 @@ func draw(db *erDb, config *jsobj.Object, rc *core.Context, turned bool) core.Re
 			if strings.Contains(view.style.Shape, "fill:") {
 				opacity = ` opacity="0.6"`
 			}
-			body = `<rect ` + shape + boxAttrs + view.style.Shape + `/>` +
+			body = `<rect ` + shape + svg.Rounded(boxAttrs+view.style.Shape) + `/>` +
 				// Over a fill the diagram chose, the shading is a tint of that fill. The opacity
 				// is on the group because the two parts of the last row overlap.
 				`<g class="pele-er-stripes" fill="var(--_bg)"` + opacity + `>` + stripes.String() + `</g>` +
 				`<path class="pele-er-divider" d="M` + svg.Num(x0) + `,` + dividerY + `H` + svg.Num(x0+w) + `" stroke="` + lineColor + `"/>` +
-				`<rect ` + shape + ` fill="none" stroke="var(--_b)"` + view.style.Line + `/>` +
+				`<rect ` + shape + ` fill="none" stroke="var(--_b)"` + svg.Rounded(view.style.Line) + `/>` +
 				name +
 				`<g class="pele-er-attributes" font-size="` + jsnum.Format(view.rowSize) + `">` + cellsOut.String() + `</g>`
 		}

@@ -94,7 +94,7 @@ func renderTreemap(m *treemapModel, config *jsobj.Object, rc *core.Context) core
 			classSelector = *node.classSelector
 		}
 		group := `data-id="` + svg.EscText(node.name) + `">`
-		rect := `<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(b.w) + `" height="` + svg.Num(b.h) + `" rx="` + svg.Radius + `" fill="` + color + `"`
+		rect := `<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(b.w) + `" height="` + svg.Num(b.h) + `" fill="` + color + `"`
 
 		if !node.leaf {
 			label := ""
@@ -125,7 +125,7 @@ func renderTreemap(m *treemapModel, config *jsobj.Object, rc *core.Context) core
 				tint = ""
 			}
 			sections.WriteString(`<g class="pele-node pele-section` + svg.ClassNames(classSelector) + `" ` + group +
-				rect + tint + ` stroke="` + color + `"` + style.Shape + `/>` + label + `</g>`)
+				rect + svg.Rounded(tint+` stroke="`+color+`"`+style.Shape) + `/>` + label + `</g>`)
 			continue
 		}
 
@@ -148,7 +148,7 @@ func renderTreemap(m *treemapModel, config *jsobj.Object, rc *core.Context) core
 				}
 			}
 		}
-		leaves.WriteString(`<g class="pele-node pele-leaf` + svg.ClassNames(classSelector) + `" ` + group + rect + style.Shape + `/>` + label + `</g>`)
+		leaves.WriteString(`<g class="pele-node pele-leaf` + svg.ClassNames(classSelector) + `" ` + group + rect + svg.Rounded(style.Shape) + `/>` + label + `</g>`)
 	}
 
 	totalWidth := math.Ceil(max(width, title.Width) + float64(2*pad))

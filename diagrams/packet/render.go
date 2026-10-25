@@ -200,7 +200,7 @@ func draw(m model, config *jsobj.Object, rc *core.Context, down bool) core.Rende
 			x := left + float64(slot*bitWidth)
 			w := float64(count*bitWidth) - gap
 			fields.WriteString(`<g class="pele-node" data-id="` + jsnum.Format(b.start) + "-" + jsnum.Format(b.end) + `">` +
-				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(w) + `" height="` + svg.Num(rowHeight) + `" rx="` + svg.Radius + `" fill="var(--_s)" stroke="var(--_b)"/>`)
+				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(w) + `" height="` + svg.Num(rowHeight) + `" fill="var(--_s)" stroke="var(--_b)"` + svg.RoundedStyle + `/>`)
 			if down {
 				fields.WriteString(svg.LabelSVG(labels[index][k], x+float64(w/2), y+float64(rowHeight/2), "", nil))
 			} else if t := fit(b.label, w-6); t.ok && t.Size <= rowHeight {

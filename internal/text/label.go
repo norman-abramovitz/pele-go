@@ -8,12 +8,13 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
 )
 
-// Span is a run of text in one style, or an icon.
+// Span is a run of text in one style, an icon, or typeset math.
 type Span struct {
 	Text  string
 	Style Style
 	// Icon is the icon's name, or "" for text.
 	Icon  string
+	Math  *MathMarkup
 	Width float64
 }
 
@@ -25,12 +26,82 @@ type Label struct {
 	Height     float64
 	Size       float64
 	LineHeight float64
+	// Heights is set only when math needs extra line height.
+	Heights []float64
 }
 
 // LineHeight is the line height as a multiple of the font size.
 const LineHeight = 1.5
 
 var empty = Label{}
+
+// Unique placeholders protect TeX from markup parsing and keep expressions aligned when tags
+// are removed.
+const (
+	mark     = 0xe000
+	maxMarks = 0x1900
+)
+
+type marks struct {
+	tex  []string
+	math []*MathMarkup
+}
+
+// isMark is /[\ue000-\uf8ff]/.
+func isMark(r rune) bool { return r >= 0xe000 && r <= 0xf8ff }
+
+func hasMark(s string) bool {
+	for i := 0; i < len(s); {
+		r, n := jsstr.Decode(s, i)
+		if isMark(r) {
+			return true
+		}
+		i += n
+	}
+	return false
+}
+
+// mathAt matches /\$\$(.+?)\$\$/ at i and returns the end of the TeX and of the match.
+func mathAt(s string, i int) (int, int, bool) {
+	if !strings.HasPrefix(s[i:], "$$") {
+		return 0, 0, false
+	}
+	p := i + 2
+	for q := p; q < len(s); {
+		r, n := jsstr.Decode(s, q)
+		if jsstr.IsLineEnd(r) {
+			return 0, 0, false
+		}
+		q += n
+		if strings.HasPrefix(s[q:], "$$") {
+			return q, q + 2, true
+		}
+	}
+	return 0, 0, false
+}
+
+// markMath replaces each $$...$$ in raw with a mark, recording its TeX in found.
+func markMath(raw string, found *marks) string {
+	var out strings.Builder
+	last := 0
+	for i := 0; i < len(raw); {
+		end, stop, ok := mathAt(raw, i)
+		if !ok {
+			i++
+			continue
+		}
+		if len(found.tex) == maxMarks {
+			i = stop
+			continue
+		}
+		found.tex = append(found.tex, raw[i+2:end])
+		out.WriteString(raw[last:i])
+		out.WriteRune(rune(mark + len(found.tex) - 1))
+		last = stop
+		i = stop
+	}
+	return out.String() + raw[last:]
+}
 
 // isCJK reports whether r is a Chinese or Japanese character, between any two of which a
 // line may break. Hangul is left out: Korean puts spaces between words.
@@ -173,12 +244,45 @@ func dedent(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-func pushText(line *[]Span, text string, style Style) {
+func plain(span *Span) bool {
+	return span.Icon == "" && span.Math == nil
+}
+
+func pushText(line *[]Span, text string, style Style, found *marks) {
 	if text == "" {
 		return
 	}
+	if found != nil && hasMark(text) {
+		last := 0
+		for i := 0; i < len(text); {
+			r, n := jsstr.Decode(text, i)
+			if !isMark(r) {
+				i += n
+				continue
+			}
+			if last < i {
+				pushPlain(line, text[last:i], style)
+			}
+			at := int(r) - mark
+			if math := found.math[at]; math != nil {
+				*line = append(*line, Span{Style: style, Math: math, Width: math.Width})
+			} else {
+				pushPlain(line, "$$"+found.tex[at]+"$$", style)
+			}
+			i += n
+			last = i
+		}
+		if last < len(text) {
+			pushPlain(line, text[last:], style)
+		}
+		return
+	}
+	pushPlain(line, text, style)
+}
+
+func pushPlain(line *[]Span, text string, style Style) {
 	decoded := DecodeEntities(text)
-	if n := len(*line); n > 0 && (*line)[n-1].Style == style && (*line)[n-1].Icon == "" {
+	if n := len(*line); n > 0 && plain(&(*line)[n-1]) && (*line)[n-1].Style == style {
 		(*line)[n-1].Text += decoded
 		return
 	}
@@ -213,9 +317,9 @@ func iconAt(s string, i int) (string, int, bool) {
 	return try(p)
 }
 
-func pushIcons(line *[]Span, text string, style Style, icons *Icons) {
+func pushIcons(line *[]Span, text string, style Style, icons *Icons, found *marks) {
 	if !strings.Contains(text, ":fa-") {
-		pushText(line, text, style)
+		pushText(line, text, style, found)
 		return
 	}
 	last := 0
@@ -225,7 +329,7 @@ func pushIcons(line *[]Span, text string, style Style, icons *Icons) {
 			i++
 			continue
 		}
-		pushText(line, text[last:i], style)
+		pushText(line, text[last:i], style, found)
 		last = end
 		i = end
 		switch {
@@ -235,12 +339,12 @@ func pushIcons(line *[]Span, text string, style Style, icons *Icons) {
 			// An icon the host does not have leaves no gap, nor the space that set it off from the text.
 			last++
 		case last == len(text):
-			if n := len(*line); n > 0 && (*line)[n-1].Icon == "" {
+			if n := len(*line); n > 0 && plain(&(*line)[n-1]) {
 				(*line)[n-1].Text = jsstr.TrimEnd((*line)[n-1].Text)
 			}
 		}
 	}
-	pushText(line, text[last:], style)
+	pushText(line, text[last:], style, found)
 }
 
 // tagAt matches /<\/?([a-zA-Z][\w-]*)(?:\s[^<>]*)?\/?>/ at i and returns the tag name
@@ -283,12 +387,12 @@ func isWordRune(r rune) bool {
 }
 
 // inline splits inline HTML and, for markdown labels, emphasis markers into styled spans.
-func inline(line *[]Span, source string, markdown bool, base Style, icons *Icons) {
-	style := base
+func inline(line *[]Span, source string, markdown bool, base, htmlStyle Style, icons *Icons, found *marks) Style {
+	style := htmlStyle
 	var marked Style
 	var text strings.Builder
 	flush := func() {
-		pushIcons(line, text.String(), style, icons)
+		pushIcons(line, text.String(), style, icons, found)
 		text.Reset()
 	}
 	n := len(source)
@@ -308,8 +412,10 @@ func inline(line *[]Span, source string, markdown bool, base Style, icons *Icons
 				if bit != 0 {
 					flush()
 					if closing {
+						htmlStyle = (htmlStyle &^ bit) | (base & bit)
 						style = (style &^ bit) | (base & bit)
 					} else {
+						htmlStyle |= bit
 						style |= bit
 					}
 				}
@@ -353,6 +459,7 @@ func inline(line *[]Span, source string, markdown bool, base Style, icons *Icons
 		i += size
 	}
 	flush()
+	return htmlStyle
 }
 
 func measureSpans(line []Span, m Measurer, size float64) float64 {
@@ -360,6 +467,8 @@ func measureSpans(line []Span, m Measurer, size float64) float64 {
 	for i := range line {
 		if line[i].Icon != "" {
 			line[i].Width = size * 1.25
+		} else if line[i].Math != nil {
+			line[i].Width = line[i].Math.Width
 		} else {
 			line[i].Width = m.Width(line[i].Text, size, line[i].Style)
 		}
@@ -372,7 +481,7 @@ func wrap(line []Span, m Measurer, size, maxWidth float64, out *[][]Span, widths
 	var current []Span
 	width := 0.0
 	commit := func() {
-		if n := len(current); n > 0 && current[n-1].Icon == "" {
+		if n := len(current); n > 0 && plain(&current[n-1]) {
 			last := &current[n-1]
 			if trimmed := jsstr.TrimEnd(last.Text); trimmed != last.Text {
 				last.Text = trimmed
@@ -387,8 +496,11 @@ func wrap(line []Span, m Measurer, size, maxWidth float64, out *[][]Span, widths
 		width = 0
 	}
 	for _, span := range line {
-		if span.Icon != "" {
+		if span.Icon != "" || span.Math != nil {
 			w := float64(size * 1.25)
+			if span.Math != nil {
+				w = span.Math.Width
+			}
 			if width > 0 && width+w > maxWidth {
 				commit()
 			}
@@ -403,7 +515,7 @@ func wrap(line []Span, m Measurer, size, maxWidth float64, out *[][]Span, widths
 				commit()
 				part = jsstr.TrimStart(part)
 			}
-			if n := len(current); n > 0 && current[n-1].Style == span.Style && current[n-1].Icon == "" {
+			if n := len(current); n > 0 && plain(&current[n-1]) && current[n-1].Style == span.Style {
 				last := &current[n-1]
 				last.Text += part
 				last.Width = m.Width(last.Text, size, last.Style)
@@ -461,6 +573,17 @@ func Layout(raw string, markdown bool, m Measurer, size, maxWidth float64, base 
 	}
 	lineHeight := jsmath.Round(size * LineHeight)
 
+	if icons.MathActive() && strings.Contains(raw, "$$") && !hasMark(raw) {
+		found := &marks{}
+		marked := markMath(raw, found)
+		if len(found.tex) > 0 {
+			for _, tex := range found.tex {
+				found.math = append(found.math, icons.typeset(DecodeEntities(tex), size))
+			}
+			return layoutMarkup(marked, markdown, m, size, maxWidth, base, lineHeight, icons, found)
+		}
+	}
+
 	if !hasMarkup(raw) && !strings.Contains(raw, "&") && !strings.Contains(raw, "ﬂ") {
 		text := jsstr.Trim(raw)
 		width := m.Width(text, size, base)
@@ -485,16 +608,29 @@ func Layout(raw string, markdown bool, m Measurer, size, maxWidth float64, base 
 		}
 		return Label{Lines: lines, Widths: widths, Width: widest, Height: float64(len(lines)) * lineHeight, Size: size, LineHeight: lineHeight}
 	}
+	return layoutMarkup(raw, markdown, m, size, maxWidth, base, lineHeight, icons, nil)
+}
 
+func layoutMarkup(raw string, markdown bool, m Measurer, size, maxWidth float64, base Style, lineHeight float64, icons *Icons, found *marks) Label {
+	label := layoutLines(raw, markdown, m, size, maxWidth, base, lineHeight, icons, found)
+	if found != nil {
+		return WithHeights(label)
+	}
+	return label
+}
+
+func layoutLines(raw string, markdown bool, m Measurer, size, maxWidth float64, base Style, lineHeight float64, icons *Icons, found *marks) Label {
 	source := jsstr.Trim(raw)
 	if markdown {
 		source = jsstr.Trim(dedent(strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(raw)))
 	}
 	var lines [][]Span
 	var widths []float64
+	// HTML tags can span explicit breaks; Markdown emphasis stays local to each line.
+	htmlStyle := base
 	for _, part := range splitBreaks(source) {
 		var line []Span
-		inline(&line, jsstr.Trim(part), markdown, base, icons)
+		htmlStyle = inline(&line, jsstr.Trim(part), markdown, base, htmlStyle, icons, found)
 		w := measureSpans(line, m, size)
 		if w > maxWidth {
 			wrap(line, m, size, maxWidth, &lines, &widths)
@@ -510,4 +646,78 @@ func Layout(raw string, markdown bool, m Measurer, size, maxWidth float64, base 
 		}
 	}
 	return Label{Lines: lines, Widths: widths, Width: width, Height: float64(len(lines)) * lineHeight, Size: size, LineHeight: lineHeight}
+}
+
+// WithHeights sets the label's line heights for the math it holds.
+func WithHeights(label Label) Label {
+	var heights []float64
+	for i, line := range label.Lines {
+		h := label.LineHeight
+		for _, span := range line {
+			if span.Math != nil {
+				h = max(h, math.Ceil(span.Math.Height+float64(label.Size/4)))
+			}
+		}
+		if h != label.LineHeight && heights == nil {
+			heights = make([]float64, len(label.Lines))
+			for k := range heights {
+				heights[k] = label.LineHeight
+			}
+		}
+		if heights != nil {
+			heights[i] = h
+		}
+	}
+	if heights == nil {
+		if label.Heights == nil {
+			return label
+		}
+		label.Heights = nil
+		label.Height = float64(len(label.Lines)) * label.LineHeight
+		return label
+	}
+	height := 0.0
+	for _, h := range heights {
+		height += h
+	}
+	label.Heights = heights
+	label.Height = height
+	return label
+}
+
+// HasMath reports whether a line holds typeset math.
+func HasMath(line []Span) bool {
+	for _, span := range line {
+		if span.Math != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// LineMiddle is the middle of line i, from the top of the label.
+func LineMiddle(label Label, i int) float64 {
+	heights := label.Heights
+	if heights == nil {
+		return float64((float64(i) + 0.5) * label.LineHeight)
+	}
+	top := 0.0
+	for k := 0; k < i; k++ {
+		top += heights[k]
+	}
+	return top + float64(heights[i]/2)
+}
+
+// LabelLine is line i of the label on its own.
+func LabelLine(label Label, i int) Label {
+	width := label.Widths[i]
+	height := label.LineHeight
+	if label.Heights != nil {
+		height = label.Heights[i]
+	}
+	line := Label{Lines: [][]Span{label.Lines[i]}, Widths: []float64{width}, Width: width, Height: height, Size: label.Size, LineHeight: label.LineHeight}
+	if height != label.LineHeight {
+		line.Heights = []float64{height}
+	}
+	return line
 }

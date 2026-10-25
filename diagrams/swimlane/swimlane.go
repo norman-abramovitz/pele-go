@@ -86,6 +86,7 @@ var variant = &flowchart.FlowVariant{
 // Diagram is the swimlane diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type:  "swimlane",
+	Math:  true,
 	Parse: flowchart.Parse,
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {
 		return flowchart.RenderFlowchart(m.(*flowchart.FlowDb), config, rc, variant)

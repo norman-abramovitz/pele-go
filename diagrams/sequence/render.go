@@ -778,17 +778,17 @@ func draw(db *seqDb, config *jsobj.Object, rc *core.Context, tight bool) core.Re
 				if f.fill != "" {
 					fill = svg.ResolveStyle([]string{"fill:" + f.fill}).Shape
 				}
-				rectsOut = append(rectsOut, `<rect class="pele-rect" x="`+x+`" y="`+svg.Num(f.top)+`" width="`+w+`" height="`+svg.Num(bottom-f.top)+`" rx="`+svg.Radius+`"`+
-					pick(fill != "", "", ` fill-opacity="0.5"`)+fill+`/>`)
+				rectsOut = append(rectsOut, `<rect class="pele-rect" x="`+x+`" y="`+svg.Num(f.top)+`" width="`+w+`" height="`+svg.Num(bottom-f.top)+`"`+
+					svg.Rounded(pick(fill != "", "", ` fill-opacity="0.5"`)+fill)+`/>`)
 			} else {
 				var inner strings.Builder
-				inner.WriteString(`<rect x="` + x + `" y="` + svg.Num(f.top) + `" width="` + w + `" height="` + svg.Num(bottom-f.top) + `" rx="` + svg.Radius + `" fill="none"/>`)
+				inner.WriteString(`<rect x="` + x + `" y="` + svg.Num(f.top) + `" width="` + w + `" height="` + svg.Num(bottom-f.top) + `" fill="none"` + svg.RoundedStyle + `/>`)
 				for k, dy := range f.dividerY {
 					lbl := f.dividerLabels[k]
 					inner.WriteString(`<path d="M` + x + `,` + svg.Num(dy) + `H` + svg.Num(f.x1) + `"` + dash + `/>` +
 						backed(lbl, f.x0+8+float64(lbl.Width/2), dy+2+float64(lbl.Height/2), ` class="pele-frame-label" fill="var(--_m)" stroke="none"`))
 				}
-				inner.WriteString(`<rect x="` + x + `" y="` + svg.Num(f.top) + `" width="` + svg.Num(f.tabW) + `" height="` + strconv.Itoa(tabH) + `" rx="` + svg.Radius + `" fill="var(--_s)"/>` +
+				inner.WriteString(`<rect x="` + x + `" y="` + svg.Num(f.top) + `" width="` + svg.Num(f.tabW) + `" height="` + strconv.Itoa(tabH) + `" fill="var(--_s)"` + svg.RoundedStyle + `/>` +
 					`<text class="pele-frame-kind" x="` + svg.Num(f.x0+float64(f.tabW/2)) + `" y="` + svg.Num(f.top+tabH/2+float64(tiny*0.35)) +
 					`" text-anchor="middle" font-size="` + jsnum.Format(tiny) + `" font-weight="var(--_hw)" fill="var(--_m)" stroke="none">` + f.kind + `</text>` +
 					backed(f.title, f.x0+f.tabW+8+float64(f.title.Width/2), f.top+float64(max(tabH, f.title.Height)/2), ` class="pele-frame-label" fill="var(--_m)" stroke="none"`))
@@ -814,7 +814,7 @@ func draw(db *seqDb, config *jsobj.Object, rc *core.Context, tight bool) core.Re
 			}
 			extend(x, x+v.w)
 			notesOut.WriteString(`<g class="pele-note" data-id="i` + svg.EscText(m.id) + `">` +
-				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(top) + `" width="` + svg.Num(v.w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `"/>` +
+				`<rect x="` + svg.Num(x) + `" y="` + svg.Num(top) + `" width="` + svg.Num(v.w) + `" height="` + svg.Num(h) + `"` + svg.RoundedStyle + `/>` +
 				svg.LabelSVG(v.label, x+float64(v.w/2), top+float64(h/2), ` class="pele-label" stroke="none" fill="var(--_fg)"`, icons) +
 				`</g>`)
 			y = top + h
@@ -898,7 +898,8 @@ func draw(db *seqDb, config *jsobj.Object, rc *core.Context, tight bool) core.Re
 					labelsOut.WriteString(`<g class="pele-edge-label" data-id="i` + svg.EscText(m.id) + `">` +
 						svg.LabelSVG(lbl, out+8+float64(lbl.Width/2), float64((top+bottom)/2), "", icons) + `</g>`)
 				}
-				lineY = bottom
+				// A label taller than the loop reaches below it, so the next row starts under the label.
+				lineY = max(bottom, float64((top+bottom)/2)+float64(lbl.Height/2))
 			} else {
 				dir := pick(b.x > a.x, 1.0, -1)
 				creating := b.createAt == i
@@ -1023,8 +1024,8 @@ func draw(db *seqDb, config *jsobj.Object, rc *core.Context, tight bool) core.Re
 			dataID = ` data-id="` + svg.EscText(run.box.name) + `"`
 		}
 		boxesOut.WriteString(`<g class="pele-cluster pele-box"` + dataID + `>` +
-			`<rect x="` + svg.Num(x0) + `" y="0" width="` + svg.Num(x1-x0) + `" height="` + svg.Num(bottom+boxPad) + `" rx="` + svg.Radius + `" fill="var(--_a)" stroke="var(--_b)"` +
-			pick(fill != "", "", ` fill-opacity="0.5"`) + fill + `/>` +
+			`<rect x="` + svg.Num(x0) + `" y="0" width="` + svg.Num(x1-x0) + `" height="` + svg.Num(bottom+boxPad) + `" fill="var(--_a)" stroke="var(--_b)"` +
+			svg.Rounded(pick(fill != "", "", ` fill-opacity="0.5"`)+fill) + `/>` +
 			svg.LabelSVG(run.title, float64((x0+x1)/2), float64(boxPad/2)+2+float64(run.title.Height/2), ` class="pele-cluster-label" fill="var(--_m)"`, icons) +
 			`</g>`)
 	}
@@ -1034,7 +1035,11 @@ func draw(db *seqDb, config *jsobj.Object, rc *core.Context, tight bool) core.Re
 
 	minY := 0.0
 	titleOut := ""
-	title := layout(db.title, size, false, pick(tight, common.TitleRoom(options), wrapW), text.Bold)
+	room := common.TitleRoom(options)
+	title := svg.TitleLabel(db.title, measurer, size, pick(tight, room, inf), icons)
+	if tight {
+		title = common.BreakLabel(title, measurer, max(120, room))
+	}
 	if minX > maxX {
 		extend(0, max(title.Width, 40))
 	}

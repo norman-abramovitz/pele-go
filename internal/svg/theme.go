@@ -20,7 +20,19 @@ const (
 	FontMono = "var(--_fm)"
 	Radius   = "var(--pele-radius,4px)"
 	Critical = "var(--pele-critical,#e45756)"
+	// RoundedStyle rounds a rect's corners. Older browsers take a variable for rx only in CSS.
+	// The default goes first so diagram styles can override it.
+	RoundedStyle = ` style="rx:var(--_r)"`
 )
+
+// Rounded adds the corner radius to a rect's attributes.
+func Rounded(attrs string) string {
+	at := strings.Index(attrs, ` style="`)
+	if at < 0 {
+		return attrs + RoundedStyle
+	}
+	return attrs[:at+8] + "rx:var(--_r);" + attrs[at+8:]
+}
 
 func isFamilyQuoted(r rune) bool {
 	return !strings.ContainsRune("\"'\\\n<>{}();:@", r)

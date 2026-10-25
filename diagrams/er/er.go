@@ -9,6 +9,7 @@ import (
 // Diagram is the er diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "er",
+	Math: true,
 	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
 		db := newErDb()
 		if title != nil && *title != "" {

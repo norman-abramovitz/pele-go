@@ -3,7 +3,7 @@
 // seeded random and structured graphs, and from the layouts upstream's own diagrams ask for when
 // rendering the corpus and the captured test sources of every type that uses layout.
 //
-// Usage: node --experimental-transform-types scripts/gen-layout-cases.mjs <pele checkout at 1.7.0>
+// Usage: node --experimental-transform-types scripts/gen-layout-cases.mjs <pele checkout at pele.UpstreamVersion>
 // Set PELE_LAYOUT_FULL=1 to keep whole outputs rather than hashes when debugging a mismatch.
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';

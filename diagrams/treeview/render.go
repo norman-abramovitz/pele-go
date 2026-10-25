@@ -262,8 +262,8 @@ func draw(m treeViewModel, config *jsobj.Object, rc *core.Context, tight bool) c
 		if r.highlighted {
 			x := inset + r.x - highlightOverhang
 			inner.WriteString(`<rect class="pele-tree-highlight" x="` + svg.Num(x) + `" y="` + svg.Num(top+r.top+1) + `" width="` +
-				svg.Num(totalWidth-inset+highlightOverhang-x) + `" height="` + svg.Num(r.height-2) + `" rx="` + svg.Radius +
-				`" fill="var(--_c)" fill-opacity="0.14"/>`)
+				svg.Num(totalWidth-inset+highlightOverhang-x) + `" height="` + svg.Num(r.height-2) +
+				`" fill="var(--_c)" fill-opacity="0.14"` + svg.RoundedStyle + `/>`)
 		}
 		if r.icon != "" {
 			name := ""

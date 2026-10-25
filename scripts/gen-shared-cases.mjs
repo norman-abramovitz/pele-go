@@ -2,7 +2,7 @@
 // internal/diagrams/common, internal/jsmath): calls of upstream's functions under V8 and what
 // they returned. Each Go package's tests replay its file through internal/fixture.
 //
-// Usage: node scripts/gen-shared-cases.mjs <pele checkout at 1.7.0>
+// Usage: node scripts/gen-shared-cases.mjs <pele checkout at pele.UpstreamVersion>
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';

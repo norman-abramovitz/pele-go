@@ -5,7 +5,7 @@ The design is `plans/design-2026-10-20-pele-go-port.md`.
 
 ## The contract
 
-Output must be **byte-identical** to Pele 1.7.0 (tag `1.7.0`, commit 8603bf3; see
+Output must be **byte-identical** to Pele 1.8.0 (tag `1.8.0`, commit 8fad23b; see
 `pele.UpstreamVersion` and `pele.UpstreamCommit`) running under V8, for the same source,
 options, `now` and measurer: the SVG, width, height, links, and on failure the error code,
 message, type, line, column and snippet. "Looks the same" is a failure.
@@ -14,7 +14,7 @@ The scripts and parts of this guide need a checkout of upstream at that tag, wit
 `node_modules` installed. Put it anywhere outside this repo; below it is `$PELE_UPSTREAM`:
 
 ```sh
-git clone --branch 1.7.0 --depth 1 https://github.com/obsidianmd/pele.git "$PELE_UPSTREAM"
+git clone --branch 1.8.0 --depth 1 https://github.com/obsidianmd/pele.git "$PELE_UPSTREAM"
 (cd "$PELE_UPSTREAM" && npm ci)
 ```
 

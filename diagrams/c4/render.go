@@ -356,8 +356,8 @@ func draw(db *c4Db, rc *core.Context, tight bool, gap float64) (core.Rendered, i
 				kind, dash = "node", ""
 			}
 			clusters.WriteString(`<g class="pele-cluster pele-c4-` + kind + `" data-id="` + svg.EscText(boundary.alias) + `">` +
-				`<rect x="` + svg.Num(g.x) + `" y="` + svg.Num(g.y) + `" width="` + svg.Num(g.w) + `" height="` + svg.Num(g.h) + `" rx="` + svg.Radius + `" fill="none" stroke="var(--_b)"` +
-				dash + style.Shape + `/>` +
+				`<rect x="` + svg.Num(g.x) + `" y="` + svg.Num(g.y) + `" width="` + svg.Num(g.w) + `" height="` + svg.Num(g.h) + `" fill="none" stroke="var(--_b)"` +
+				dash + svg.Rounded(style.Shape) + `/>` +
 				link(txt, boundary.link, boundary.alias, &links, options) +
 				"</g>")
 		}

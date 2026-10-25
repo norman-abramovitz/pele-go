@@ -62,6 +62,30 @@ Gantt charts read dates in `Options.Location` (default `time.Local`), standing i
 time zone of the JS process. Set it and `Now` if you need output that doesn't depend on the
 machine.
 
+### Math
+
+`Options.Math` typesets `$$...$$` in labels, as Mermaid does with KaTeX. Pele has no
+typesetter of its own: you get the TeX between the `$$` and the font size in pixels, and
+return the markup to draw with its size, or `nil` to leave the expression as written:
+
+```go
+res, err := pele.Render(ctx, "flowchart LR\n  A[\"$$x^2$$\"] --> B", pele.Options{
+	Math: func(tex string, size float64) *pele.MathMarkup {
+		svg, w, h, ok := typeset(tex, size) // your typesetter
+		if !ok {
+			return nil
+		}
+		return &pele.MathMarkup{Markup: svg, Width: w, Height: h}
+	},
+})
+```
+
+Set `HTML: true` for HTML markup (drawn in a `foreignObject`; the page needs the
+typesetter's CSS). The markup is trusted and goes into the SVG as given. Only the types
+Mermaid typesets math in ask (flowchart, swimlane, sequence, class, state, er, requirement,
+block, mindmap, kanban and usecase), never for diagram titles, and once per expression and
+size in a render. Markup whose width or height isn't positive and finite is dropped.
+
 ## Measurers
 
 Layout depends on how wide text is, so output is only byte-identical to upstream's when both
@@ -83,7 +107,7 @@ res, err := pele.Render(ctx, src, pele.Options{Measurer: m})
 `kern` table; no ligatures or shaping) at 1024 ppem, measures a missing glyph as
 `n`, and takes `fontmeasure.WithMono(...)` for code spans. It embeds no fonts, and it's the
 only package that pulls in `golang.org/x/image`. You can also implement `pele.TextMeasurer`
-yourself; it must be safe for concurrent use and must not panic (as must `Options.Icons`).
+yourself; it must be safe for concurrent use and must not panic (as must `Options.Icons` and `Options.Math`).
 
 ## Errors
 
@@ -103,7 +127,7 @@ if errors.As(err, &pe) {
 | `CodeSemantic` | It parses but asks for something that doesn't exist |
 | `CodeLimit` | Past `Limit`, `OutputLimit` or `MaxEdges`, or where upstream's JS throws a `RangeError` ("Diagram is nested too deeply.") |
 | `CodeCanceled` | The context was done (Go only, see below) |
-| `CodeInternal` | A panic during the render: a bug, or your `TextMeasurer` or `Icons` panicked (Go only). It wraps a `*pele.PanicError` with the value and stack |
+| `CodeInternal` | A panic during the render: a bug, or your `TextMeasurer`, `Icons` or `Math` panicked (Go only). It wraps a `*pele.PanicError` with the value and stack |
 
 Messages, lines and columns are upstream's. Columns count UTF-16 code units, as upstream's
 do.

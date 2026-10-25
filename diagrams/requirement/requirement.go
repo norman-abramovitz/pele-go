@@ -9,6 +9,7 @@ import (
 // Diagram is the requirement diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "requirement",
+	Math: true,
 	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
 		db := newRequirementDb()
 		if title != nil && *title != "" {

@@ -580,7 +580,7 @@ func renderGantt(model *ganttDb, config *jsobj.Object, rc *core.Context) core.Re
 					"," + svg.Num(cy+r) + "L" + svg.Num(cx-r) + "," + svg.Num(cy) + `Z" ` + paint + " " + stroke + ` stroke-linejoin="round"/>`
 			} else {
 				shape = `<rect x="` + svg.Num(b.x0) + `" y="` + svg.Num(cy-float64(barHeight/2)) + `" width="` + svg.Num(b.x1-b.x0) +
-					`" height="` + svg.Num(barHeight) + `" rx="` + svg.Radius + `" ` + paint + " " + stroke + `/>`
+					`" height="` + svg.Num(barHeight) + `" ` + paint + " " + stroke + svg.RoundedStyle + `/>`
 			}
 			if b.inside {
 				if state == "" {

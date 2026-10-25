@@ -163,7 +163,7 @@ func renderQuadrant(model *quadrantDb, config *jsobj.Object, rc *core.Context) c
 		halfW, halfH := float64(t.Width/2), float64(t.Height/2)
 		taken = append(taken, cx-halfW, cy-halfH, cx+halfW, cy+halfH)
 		quadrants.WriteString(`<g class="pele-quadrant" data-id="` + jsnum.Format(float64(k+1)) + `">` +
-			`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(tileW) + `" height="` + svg.Num(tileH) + `" rx="` + svg.Radius + `"/>` +
+			`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(tileW) + `" height="` + svg.Num(tileH) + `"` + svg.RoundedStyle + `/>` +
 			svg.LabelSVG(t, cx, cy, ` class="pele-label" fill="var(--_fg)" stroke="none"`, icons) +
 			`</g>`)
 	}

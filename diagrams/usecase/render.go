@@ -256,7 +256,7 @@ func figure(v *view, icons *text.Icons) string {
 	case "icon":
 		head = -14
 		radius = 12
-		out = `<rect x="-22" y="-26" width="44" height="44" rx="` + svg.Radius + `"` + shapeAttrs + shape + `/>` +
+		out = `<rect x="-22" y="-26" width="44" height="44"` + svg.Rounded(shapeAttrs+shape) + `/>` +
 			`<svg class="pele-icon" data-icon="` + svg.EscText(node.icon) + `" x="-14" y="-18" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
 			icons.Resolve(node.icon) + `</svg>`
 	default:
@@ -384,7 +384,7 @@ func draw(model *usecaseModel, config *jsobj.Object, rc *core.Context, turned bo
 					v.rows = append(v.rows, [2]text.Label{key, value})
 					v.keyW = max(v.keyW, key.Width)
 					valueW = max(valueW, value.Width)
-					v.h += max(value.Height, jsmath.Round(small*1.5)) + rowPad
+					v.h += max(key.Height, value.Height, jsmath.Round(small*1.5)) + rowPad
 				}
 				// The root of an empty object has a value and no key, and then there is no key column.
 				if v.keyW > 0 {
@@ -495,7 +495,7 @@ func draw(model *usecaseModel, config *jsobj.Object, rc *core.Context, turned bo
 		PortSep: 20,
 	})
 
-	title := text.Layout(model.title, false, measurer, size, 4000, text.Bold, icons)
+	title := svg.TitleLabel(model.title, measurer, size, 4000, icons)
 	titleHeight := 0.0
 	if title.Height > 0 {
 		titleHeight = title.Height + 12
@@ -538,7 +538,7 @@ func draw(model *usecaseModel, config *jsobj.Object, rc *core.Context, turned bo
 					`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y+tabH) + `" width="` + svg.Num(c.W) + `" height="` + svg.Num(c.H-tabH) + `"` + box + `/>` +
 					svg.LabelSVG(v.label, x+float64(tabW/2), y+float64(tabH/2), titleAttrs, icons)
 			} else {
-				body = `<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(c.W) + `" height="` + svg.Num(c.H) + `" rx="` + svg.Radius + `"` + box + `/>` +
+				body = `<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(c.W) + `" height="` + svg.Num(c.H) + `"` + svg.Rounded(box) + `/>` +
 					svg.LabelSVG(v.label, titleX(c, v.label.Width, crossings), y+8+float64(v.label.Height/2), titleAttrs, icons)
 			}
 			clusters.WriteString(`<g class="pele-cluster pele-boundary` + classes + `" data-id="` + id + `">` + body + `</g>`)
@@ -565,12 +565,12 @@ func draw(model *usecaseModel, config *jsobj.Object, rc *core.Context, turned bo
 			}
 			for _, row := range v.rows {
 				key, value := row[0], row[1]
-				rowH := max(value.Height, jsmath.Round(small*1.5)) + rowPad
+				rowH := max(key.Height, value.Height, jsmath.Round(small*1.5)) + rowPad
 				cells.WriteString(svg.LabelSVG(key, x0+cellPad+float64(key.Width/2), y+float64(rowH/2), ` class="pele-json-key" fill="var(--_m)"`, icons) +
 					leftLabel(value, x0+v.keyW+cellPad, y+float64(rowH/2), ` class="pele-json-value"`+textAttrs, icons))
 				y += rowH
 			}
-			body = `<rect x="` + svg.Num(x0) + `" y="` + svg.Num(-h/2) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `"` + shapeAttrs + shape + `/>` +
+			body = `<rect x="` + svg.Num(x0) + `" y="` + svg.Num(-h/2) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `"` + svg.Rounded(shapeAttrs+shape) + `/>` +
 				`<path class="pele-json-lines" d="` + lines + `" fill="none" stroke="var(--_b)"` + v.style.Line + `/>` +
 				svg.LabelSVG(v.label, 0, float64(-h/2)+float64(v.headH/2), ` class="pele-label" font-weight="var(--_hw)"`+textAttrs, icons) +
 				`<g font-size="` + jsnum.Format(small) + `">` + cells.String() + `</g>`
@@ -602,7 +602,7 @@ func draw(model *usecaseModel, config *jsobj.Object, rc *core.Context, turned bo
 					`<path d="M` + svg.Num(r-fold) + `,` + svg.Num(-b) + `V` + svg.Num(fold-b) + `H` + svg.Num(r) + `" fill="none" stroke="var(--_b)" stroke-linejoin="round"` + v.style.Line + `/>`
 			default:
 				kind = "pele-usecase"
-				outline = `<rect x="` + svg.Num(-w/2) + `" y="` + svg.Num(-h/2) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `"` + shapeAttrs + shape + `/>`
+				outline = `<rect x="` + svg.Num(-w/2) + `" y="` + svg.Num(-h/2) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `"` + svg.Rounded(shapeAttrs+shape) + `/>`
 			}
 			noteSize := ""
 			if node.shape == "note" {
@@ -795,11 +795,7 @@ func leftLabel(label text.Label, x, cy float64, attrs string, icons *text.Icons)
 	}
 	var out strings.Builder
 	for i := range label.Lines {
-		line := label
-		line.Lines = label.Lines[i : i+1]
-		line.Widths = label.Widths[i : i+1]
-		line.Height = label.LineHeight
-		out.WriteString(svg.LabelSVG(line, x+float64(label.Widths[i]/2), cy-float64(label.Height/2)+float64((float64(i)+0.5)*label.LineHeight), attrs, icons))
+		out.WriteString(svg.LabelSVG(text.LabelLine(label, i), x+float64(label.Widths[i]/2), cy-float64(label.Height/2)+text.LineMiddle(label, i), attrs, icons))
 	}
 	return out.String()
 }

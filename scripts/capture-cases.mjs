@@ -7,7 +7,7 @@
 // tests may pass than last time, and no more calls may be unreplayable. A first capture
 // records these as the baseline.
 //
-// Usage: node scripts/capture-cases.mjs <pele checkout at 1.7.0, with npm ci run>
+// Usage: node scripts/capture-cases.mjs <pele checkout at pele.UpstreamVersion, with npm ci run>
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

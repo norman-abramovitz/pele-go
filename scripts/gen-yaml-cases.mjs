@@ -1,7 +1,7 @@
 // Writes internal/yaml/testdata/cases.json: each input with what upstream's parseYaml returns
 // for it under V8, or the message it throws.
 //
-// Usage: node --experimental-transform-types scripts/gen-yaml-cases.mjs <pele checkout at 1.7.0>
+// Usage: node --experimental-transform-types scripts/gen-yaml-cases.mjs <pele checkout at pele.UpstreamVersion>
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';

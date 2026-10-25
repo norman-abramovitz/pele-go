@@ -10,6 +10,7 @@ import (
 // Diagram is the sequence diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "sequence",
+	Math: true,
 	Parse: func(source string, config *jsobj.Object, title *string, _ int, _ core.Limits) any {
 		var options seqDbOptions
 		if wrap, ok := config.Get("wrap"); ok {

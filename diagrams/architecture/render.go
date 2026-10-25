@@ -741,7 +741,7 @@ func draw(model *architectureDb, config *jsobj.Object, rc *core.Context, tight b
 		}
 		clusters.WriteString(`<g class="pele-cluster" data-id="` + svg.EscText(group.id) + `">` +
 			`<rect x="` + svg.Num(x) + `" y="` + svg.Num(y) + `" width="` + svg.Num(w) + `" height="` + svg.Num(bottom(g)-y) +
-			`" rx="` + svg.Radius + `" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"/>` +
+			`" fill="var(--_a)" fill-opacity="0.5" stroke="var(--_b)"` + svg.RoundedStyle + `/>` +
 			head +
 			"</g>")
 	}
@@ -769,7 +769,7 @@ func draw(model *architectureDb, config *jsobj.Object, rc *core.Context, tight b
 		}
 		nodesOut.WriteString(`<g class="pele-node pele-service" ` + at + `>` +
 			`<rect x="` + svg.Num(-half) + `" width="` + svg.Num(iconSize) + `" height="` + svg.Num(iconSize) +
-			`" rx="` + svg.Radius + `" fill="var(--_s)" stroke="var(--_b)"/>` +
+			`" fill="var(--_s)" stroke="var(--_b)"` + svg.RoundedStyle + `/>` +
 			inner +
 			svg.LabelSVG(labels[i], 0, iconSize+labelGap+float64(labels[i].Height/2), ` class="pele-label"`, icons) +
 			"</g>")

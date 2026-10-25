@@ -99,8 +99,8 @@ func drawActor(kind string, cx, top float64, size actorSizeT, label text.Label, 
 	if kind == "collections" {
 		bw := w - stackOff
 		bh := h - stackOff
-		back := `<rect x="` + svg.Num(left+stackOff) + `" y="` + svg.Num(top) + `" width="` + svg.Num(bw) + `" height="` + svg.Num(bh) + `" rx="` + svg.Radius + `"` + shapeAttr + `/>`
-		front := `<rect x="` + svg.Num(left) + `" y="` + svg.Num(top+stackOff) + `" width="` + svg.Num(bw) + `" height="` + svg.Num(bh) + `" rx="` + svg.Radius + `"` + shapeAttr + `/>`
+		back := `<rect x="` + svg.Num(left+stackOff) + `" y="` + svg.Num(top) + `" width="` + svg.Num(bw) + `" height="` + svg.Num(bh) + `"` + shapeAttr + svg.RoundedStyle + `/>`
+		front := `<rect x="` + svg.Num(left) + `" y="` + svg.Num(top+stackOff) + `" width="` + svg.Num(bw) + `" height="` + svg.Num(bh) + `"` + shapeAttr + svg.RoundedStyle + `/>`
 		return back + front + svg.LabelSVG(label, left+float64(bw/2), top+stackOff+float64(bh/2), attrs, icons)
 	}
 	if kind == "queue" {
@@ -113,6 +113,6 @@ func drawActor(kind string, cx, top float64, size actorSizeT, label text.Label, 
 			`<path d="M` + r + `,` + svg.Num(top) + `A` + c + `,` + ry + ` 0 0 0 ` + r + `,` + b + `"` + lineAttr + `/>` +
 			svg.LabelSVG(label, cx-capW/2, top+float64(h/2), attrs, icons)
 	}
-	return `<rect x="` + svg.Num(left) + `" y="` + svg.Num(top) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `"` + shapeAttr + `/>` +
+	return `<rect x="` + svg.Num(left) + `" y="` + svg.Num(top) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `"` + shapeAttr + svg.RoundedStyle + `/>` +
 		svg.LabelSVG(label, cx, top+float64(h/2), attrs, icons)
 }

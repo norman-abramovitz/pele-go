@@ -10,6 +10,7 @@ import (
 // Diagram is the kanban diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "kanban",
+	Math: true,
 	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
 		db := &kanbanDb{}
 		if title != nil {

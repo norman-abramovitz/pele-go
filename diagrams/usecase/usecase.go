@@ -9,6 +9,7 @@ import (
 // Diagram is the use case diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "usecase",
+	Math: true,
 	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
 		t := ""
 		if title != nil {

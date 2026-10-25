@@ -1,11 +1,12 @@
 package text
 
-// Icons resolves icon names to SVG markup for one render. Upstream keeps the resolver in a
-// module variable for the length of a render; here it is passed down instead, so renders
-// can run at the same time.
+// Icons resolves icon names to SVG markup for one render, and carries the render's math
+// typesetter. Upstream keeps both in module variables for the length of a render; here
+// they are passed down instead, so renders can run at the same time.
 type Icons struct {
 	resolve func(name string) string
 	found   map[string]string
+	math    *Math
 }
 
 // NewIcons returns the icons for a render. A nil resolve means the host has none.

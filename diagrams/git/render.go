@@ -336,7 +336,7 @@ func draw(model *gitModel, config *jsobj.Object, rc *core.Context, direction str
 				`<path class="pele-lane" d="M` + point(-labelGap, c) + `L` + point(end+tail, c) + `" stroke="` + color + `" stroke-dasharray="2 4"/>`)
 			if len(name.Lines) > 0 {
 				grow(cx-float64(w/2), cy-float64(h/2), cx+float64(w/2), cy+float64(h/2))
-				branches.WriteString(`<rect x="` + svg.Num(cx-float64(w/2)) + `" y="` + svg.Num(cy-float64(h/2)) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" rx="` + svg.Radius + `" fill="` + color + `"/>` +
+				branches.WriteString(`<rect x="` + svg.Num(cx-float64(w/2)) + `" y="` + svg.Num(cy-float64(h/2)) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) + `" fill="` + color + `"` + svg.RoundedStyle + `/>` +
 					svg.LabelSVG(name, cx, cy, ` class="pele-label" fill="var(--_bg)"`, nil))
 			}
 			branches.WriteString(`</g>`)

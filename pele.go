@@ -28,8 +28,8 @@ import (
 // commit its tag points to. This module's own version is separate: it moves with changes
 // here, and a new upstream release only changes these.
 const (
-	UpstreamVersion = "1.7.0"
-	UpstreamCommit  = "8603bf3313add9143cd417015d4a6bd6c522dada"
+	UpstreamVersion = "1.8.0"
+	UpstreamCommit  = "8fad23bd51783e4df1204e177a7fb0d2a30dcd13"
 )
 
 // Options are the render options, upstream's RenderOptions. The zero value renders as
@@ -62,6 +62,14 @@ const (
 //   - Icons returns SVG markup for an icon name, or "" when the host has none. It must be
 //     safe for concurrent use if Render is called concurrently with it, and must not panic:
 //     Render recovers a panic in it as a CodeInternal error, but the render is lost.
+//   - Math typesets a $$...$$ expression in a label: it gets the TeX between the $$ and the
+//     font size in pixels, and returns the markup to draw, or nil to leave the expression as
+//     written. Only the types Mermaid typesets math in ask it (flowchart, swimlane, sequence,
+//     class, state, er, requirement, block, mindmap, kanban and usecase); diagram titles stay
+//     text. It is asked once per expression and size in a render; markup whose width or
+//     height is not positive and finite is dropped. Nil means none. It must be safe for
+//     concurrent use if Render is called concurrently with it, and must not panic: Render
+//     recovers a panic in it as a CodeInternal error, but the render is lost.
 //   - Config is Mermaid configuration from the host, made with ParseConfig. The diagram's
 //     own front matter and directives win over it, key by key at the top level.
 //   - Now is the time gantt charts treat as now. The zero time means the current time.
@@ -94,6 +102,12 @@ func ParseConfig(jsonText string) (*Config, error) {
 func Ptr[T any](v T) *T {
 	return &v
 }
+
+// MathMarkup is math typeset by Options.Math. Markup is SVG drawn in the expression's box,
+// or, when HTML is set, HTML drawn in a foreignObject, which needs the typesetter's CSS on
+// the page. Width and Height are its size in pixels. The markup is trusted: it goes into the
+// SVG as given.
+type MathMarkup = core.MathMarkup
 
 // Link is an element of a rendered diagram that links somewhere. ID is the id of the
 // element in the SVG, Href is where it links, and Internal reports a link to another

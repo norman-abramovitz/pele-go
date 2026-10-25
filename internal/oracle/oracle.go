@@ -17,10 +17,10 @@ import (
 
 // Version is the upstream release the bundle was published as. It must equal
 // pele.UpstreamVersion.
-const Version = "1.7.0"
+const Version = "1.8.0"
 
-// bundleSHA256 is the checksum of dist/pele.global.js in the npm package pele@1.7.0.
-const bundleSHA256 = "4f7a9ccd52de93e4a7a60d1b1d6dd647449b7b1f8b2ccb94706b8558cec68a59"
+// bundleSHA256 is the checksum of dist/pele.global.js in the npm package pele@1.8.0.
+const bundleSHA256 = "9bf34b3a9a19351dc69d0d238e365560331a8ae392c41656df7f5090653253d0"
 
 //go:embed testdata/pele.global.js
 var bundle string

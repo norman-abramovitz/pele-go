@@ -164,10 +164,22 @@ func number(v any) float64 {
 	return v.(float64)
 }
 
-// capturedNow is when the captured calls ran, which a call with an invalid now used as the
-// current time. It was recovered from the outcomes of two such gantt calls, which both match
-// at this second (00:31:40 in Sydney).
-var capturedNow = time.Date(2026, time.October, 20, 13, 31, 40, 0, time.UTC)
+// numberOrNaN reads a captured number, or gives NaN for a value that is not one.
+func numberOrNaN(v any) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case *jsobj.Object:
+		if _, ok := x.Get("$number"); ok {
+			return number(x)
+		}
+	}
+	return math.NaN()
+}
+
+// capturedNow is the clock a call with an invalid now read during the capture, which
+// scripts/capture/capture-setup.ts stops at its FIXED_NOW.
+var capturedNow = time.Date(2026, time.October, 20, 9, 30, 0, 0, time.UTC)
 
 // captureZone is the time zone the captured calls ran in, which gantt's dates depend on.
 const captureZone = "Australia/Sydney"
@@ -209,6 +221,35 @@ func capturedOptions(t *testing.T, rec *jsobj.Object) pele.Options {
 			markup, _ := icons.Get(name)
 			s, _ := markup.(string)
 			return s
+		}
+	}
+	if _, ok := rec.Get("math"); ok {
+		answers := get[*jsobj.Object](rec, "math")
+		opts.Math = func(tex string, size float64) *pele.MathMarkup {
+			answer, _ := answers.Get(jsnum.Format(size) + "\n" + tex)
+			o, ok := answer.(*jsobj.Object)
+			if !ok {
+				return nil
+			}
+			markup := &pele.MathMarkup{}
+			if v, ok := o.Get("svg"); ok {
+				if markup.Markup, ok = v.(string); !ok {
+					return nil
+				}
+			} else if v, ok := o.Get("html"); ok {
+				if markup.Markup, ok = v.(string); !ok {
+					return nil
+				}
+				markup.HTML = true
+			} else {
+				return nil
+			}
+			width, _ := o.Get("width")
+			height, _ := o.Get("height")
+			// Upstream drops markup whose size is not a finite number; NaN stands in for a
+			// size that is not a number at all.
+			markup.Width, markup.Height = numberOrNaN(width), numberOrNaN(height)
+			return markup
 		}
 	}
 	raw := get[*jsobj.Object](rec, "options")

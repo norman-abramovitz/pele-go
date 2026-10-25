@@ -6,71 +6,6 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
 )
 
-// A rectangle's corner radius comes from a variable. Browsers only lately take a variable
-// in the rx attribute, and all of them take one in a style, so that is where it is written.
-// It goes first there, for a radius the diagram's author set to come after it and win.
-const rounded = ` rx="` + Radius + `"`
-
-// rectEnd returns the end of the <rect ...> tag starting at i, or -1:
-// /<rect\b[^>]*>/
-func rectEnd(s string, i int) int {
-	if !strings.HasPrefix(s[i:], "<rect") {
-		return -1
-	}
-	p := i + len("<rect")
-	if p < len(s) && isWord(s[p]) {
-		return -1
-	}
-	end := strings.IndexByte(s[p:], '>')
-	if end == -1 {
-		return -1
-	}
-	return p + end + 1
-}
-
-func isWord(c byte) bool {
-	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_'
-}
-
-func roundCorners(content string) string {
-	if !strings.Contains(content, rounded) {
-		return content
-	}
-	var out strings.Builder
-	last := 0
-	for i := 0; i < len(content); i++ {
-		if content[i] != '<' {
-			continue
-		}
-		end := rectEnd(content, i)
-		if end == -1 {
-			continue
-		}
-		tag := content[i:end]
-		out.WriteString(content[last:i])
-		out.WriteString(roundTag(tag))
-		last = end
-		i = end - 1
-	}
-	return out.String() + content[last:]
-}
-
-func roundTag(tag string) string {
-	at := strings.Index(tag, rounded)
-	if at < 0 {
-		return tag
-	}
-	rest := tag[:at] + tag[at+len(rounded):]
-	if style := strings.Index(rest, ` style="`); style >= 0 {
-		return rest[:style+8] + "rx:var(--_r);" + rest[style+8:]
-	}
-	end := len(rest) - 1
-	if strings.HasSuffix(rest, "/>") {
-		end = len(rest) - 2
-	}
-	return rest[:end] + ` style="rx:var(--_r)"` + rest[end:]
-}
-
 // weights are the weights of bold text, each set only in a diagram that has such text.
 var weights = [][2]string{
 	{"--_tw", "title"},
@@ -112,7 +47,6 @@ func Document(typ string, width, height, fontSize float64, opts DocumentOptions,
 	if !opts.Responsive {
 		fit = ""
 	}
-	content = roundCorners(content)
 	w := ""
 	if strings.Contains(content, "var(--_r)") {
 		w = ";--_r:" + Radius

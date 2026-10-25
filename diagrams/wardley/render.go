@@ -249,7 +249,7 @@ func draw(m wardleyModel, config *jsobj.Object, rc *core.Context, plotW, natural
 		grow(left-pipelinePad, top, right+pipelinePad, top+4*radius)
 		pipelines.WriteString(`<g class="pele-wardley-pipeline" data-id="` + svg.EscText(pipeline.nodeID) + `">` +
 			`<rect x="` + svg.Num(left-pipelinePad) + `" y="` + svg.Num(top) + `" width="` + svg.Num(right-left+2*pipelinePad) + `" height="` + svg.Num(4*radius) +
-			`" rx="` + svg.Radius + `" fill="var(--_s)" stroke="var(--_b)"/>`)
+			`" fill="var(--_s)" stroke="var(--_b)"` + svg.RoundedStyle + `/>`)
 		if len(parts) > 1 {
 			pipelines.WriteString(`<path d="M` + svg.Num(left) + `,` + svg.Num(y) + `H` + svg.Num(right) + `" stroke="` + line + `" stroke-dasharray="4 4"/>`)
 		}
@@ -561,7 +561,7 @@ func draw(m wardleyModel, config *jsobj.Object, rc *core.Context, plotW, natural
 			y += l.Height
 		}
 		annotations.WriteString(`<g class="pele-wardley-annotations"><rect x="` + svg.Num(bx) + `" y="` + svg.Num(by) + `" width="` + svg.Num(width) + `" height="` + svg.Num(height) +
-			`" rx="` + svg.Radius + `" fill="var(--_bg)" stroke="var(--_b)"/>` + rows.String() + `</g>`)
+			`" fill="var(--_bg)" stroke="var(--_b)"` + svg.RoundedStyle + `/>` + rows.String() + `</g>`)
 	}
 
 	var notes strings.Builder

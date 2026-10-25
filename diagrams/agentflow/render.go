@@ -425,7 +425,7 @@ func draw(db *agentflowDb, config *jsobj.Object, rc *core.Context, turned bool) 
 			titleX := svg.ClusterTitleX(c, view.label.Width, crossings, groupPad)
 			clusters.WriteString(`<g class="pele-cluster pele-flow` + classes + `" data-id="` + id + `">` +
 				`<rect x="` + svg.Num(x-float64(c.W/2)) + `" y="` + svg.Num(y-float64(c.H/2)) + `" width="` + svg.Num(c.W) + `" height="` + svg.Num(c.H) +
-				`" rx="` + svg.Radius + `"` + tint(colorIndex, "0.06", view.style) + view.style.Shape + `/>` +
+				`"` + svg.Rounded(tint(colorIndex, "0.06", view.style)+view.style.Shape) + `/>` +
 				svg.LabelSVG(view.label, titleX, y-float64(c.H/2)+8+float64(view.label.Height/2), ` class="pele-cluster-label" fill="var(--_m)"`+view.style.Text, icons) +
 				`</g>`)
 			continue
@@ -439,7 +439,7 @@ func draw(db *agentflowDb, config *jsobj.Object, rc *core.Context, turned bool) 
 			line := float64(h/2) - dots - 2
 			mid := line + (dots+2)/2
 			shape = `<rect x="` + svg.Num(-w/2) + `" y="` + svg.Num(-h/2) + `" width="` + svg.Num(w) + `" height="` + svg.Num(h) +
-				`" rx="` + svg.Radius + `"` + tint(colorIndex, "0.06", view.style) + view.style.Shape + `/>` +
+				`"` + svg.Rounded(tint(colorIndex, "0.06", view.style)+view.style.Shape) + `/>` +
 				`<path d="M` + svg.Num(float64(-w/2)+10) + `,` + svg.Num(line) + `H` + svg.Num(float64(w/2)-10) + `" fill="none" stroke="` + color +
 				`" stroke-dasharray="3 3"` + view.style.Line + `/>` +
 				`<path class="pele-collapsed-mark" d="` + dot(-9, mid) + dot(0, mid) + dot(9, mid) + `" fill="` + color + `" stroke="none"/>`

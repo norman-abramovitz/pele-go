@@ -331,7 +331,6 @@ func buildFlowGraph(model *FlowDb, defaultCurve string) *FlowGraph {
 			node.Shape = shapeOf(vertex)
 		}
 		graph.Nodes = append(graph.Nodes, node)
-		byID[vertex.ID] = node
 	}
 
 	for index, raw := range model.Edges {
