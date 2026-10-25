@@ -261,7 +261,7 @@ func ResolveStyle(declarations []string) ResolvedStyle {
 		}
 		prop := propertyName(jsstr.Trim(decl[:at]))
 		value := jsstr.Trim(dropImportant(decl[at+1:]))
-		if value == "" || isUnsafe(value) {
+		if value == "" || isUnsafe(value) || HasInvalidXML(value) {
 			continue
 		}
 		if shapeProps[prop] {

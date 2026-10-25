@@ -467,7 +467,7 @@ func draw(db *erDb, config *jsobj.Object, rc *core.Context, turned bool) core.Re
 		display = text.DecodeEntities(display)
 		if strings.Contains(classes+" ", " internal-link ") && name != "" && (options.Links == nil || *options.Links) {
 			// The name ends up in an href, so it gets the same check as a URL.
-			_, safe := util.LinkURL(util.SanitizeURL(display), options)
+			safe := util.InternalLink(display, options)
 			target := svg.Esc(display)
 			href := ""
 			if safe {

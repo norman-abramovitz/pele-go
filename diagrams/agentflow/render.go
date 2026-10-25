@@ -462,7 +462,7 @@ func draw(db *agentflowDb, config *jsobj.Object, rc *core.Context, turned bool) 
 		if internal && node.label != "" && (options.Links == nil || *options.Links) {
 			// The label is a note name, but it still ends up in an href, so it gets the same check as a URL.
 			name := text.DecodeEntities(node.label)
-			_, safe := util.LinkURL(util.SanitizeURL(name), options)
+			safe := util.InternalLink(name, options)
 			target := svg.Esc(name)
 			href := ""
 			if safe {

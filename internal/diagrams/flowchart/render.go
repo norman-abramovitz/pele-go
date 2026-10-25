@@ -420,7 +420,7 @@ func draw(db *FlowDb, config *jsobj.Object, rc *core.Context, variant *FlowVaria
 		if internal && node.Label != "" && (options.Links == nil || *options.Links) {
 			// The label is a note name, but it still ends up in an href, so it gets the same check as a URL.
 			name := text.DecodeEntities(node.Label)
-			_, safe := util.LinkURL(util.SanitizeURL(name), options)
+			safe := util.InternalLink(name, options)
 			target := svg.Esc(name)
 			href := ""
 			if safe {

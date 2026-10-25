@@ -15,11 +15,56 @@ func isControl(c byte) bool {
 	return c <= 0x08 || c == 0x0b || c == 0x0c || (c >= 0x0e && c <= 0x1f) || c == 0x7f
 }
 
-// Esc escapes text for XML and drops the control characters XML does not allow.
+// invalidXMLAt is the length in bytes of the character RE_INVALID_XML,
+// /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ud800-\udfff\ufffe\uffff]/u, matches at s[i], or 0. With
+// the u flag the surrogate range matches only lone surrogates, which WTF-8 writes as ED A0-BF
+// xx; a pair is one 4-byte code point.
+func invalidXMLAt(s string, i int) int {
+	switch c := s[i]; {
+	case isControl(c):
+		return 1
+	case c == 0xed && i+2 < len(s) && s[i+1] >= 0xa0 && s[i+1] <= 0xbf && s[i+2]&0xc0 == 0x80:
+		return 3
+	case c == 0xef && i+2 < len(s) && s[i+1] == 0xbf && (s[i+2] == 0xbe || s[i+2] == 0xbf):
+		return 3
+	}
+	return 0
+}
+
+// HasInvalidXML is RE_INVALID_XML.test(s). Removing these characters in Esc can make a
+// validated value unsafe.
+func HasInvalidXML(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if invalidXMLAt(s, i) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// DropInvalidXML removes what RE_INVALID_XML matches.
+func DropInvalidXML(s string) string {
+	if !HasInvalidXML(s) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); {
+		if n := invalidXMLAt(s, i); n > 0 {
+			i += n
+			continue
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
+}
+
+// Esc escapes text for XML and drops invalid XML characters and DEL.
 func Esc(s string) string {
 	needs := false
 	for i := 0; i < len(s); i++ {
-		if c := s[i]; c == '&' || c == '<' || c == '>' || c == '"' || isControl(c) {
+		if c := s[i]; c == '&' || c == '<' || c == '>' || c == '"' || invalidXMLAt(s, i) > 0 {
 			needs = true
 			break
 		}
@@ -39,8 +84,11 @@ func Esc(s string) string {
 			b.WriteString("&gt;")
 		case c == '"':
 			b.WriteString("&quot;")
-		case isControl(c):
 		default:
+			if n := invalidXMLAt(s, i); n > 0 {
+				i += n - 1
+				continue
+			}
 			b.WriteByte(c)
 		}
 	}

@@ -55,13 +55,23 @@ type band struct {
 func hardWrap(raw string, columns int) []string {
 	var out []string
 	for _, line := range strings.Split(text.DecodeEntities(raw), "\n") {
-		n := jsstr.Len(line)
-		if n <= columns {
+		if jsstr.Len(line) <= columns {
 			out = append(out, line)
 			continue
 		}
-		for i := 0; i < n; i += columns {
-			out = append(out, jsstr.Slice(line, i, min(i+columns, n)))
+		// Array.from(line): code points, with a lone surrogate on its own.
+		var chars []string
+		for i := 0; i < len(line); {
+			_, n := jsstr.Decode(line, i)
+			chars = append(chars, line[i:i+n])
+			i += n
+		}
+		if len(chars) <= columns {
+			out = append(out, line)
+			continue
+		}
+		for i := 0; i < len(chars); i += columns {
+			out = append(out, strings.Join(chars[i:min(i+columns, len(chars))], ""))
 		}
 	}
 	return out

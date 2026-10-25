@@ -59,9 +59,28 @@ func (u units) trim() units {
 	return units(jsstr.UTF16(jsstr.Trim(jsstr.FromUTF16(u))))
 }
 
-// isCtrl is RE_CTRL, /[\u0000-\u001F\u007F-\u009F\u2000-\u200D\uFEFF]/.
-func isCtrl(c uint16) bool {
-	return c <= 0x1f || c >= 0x7f && c <= 0x9f || c >= 0x2000 && c <= 0x200d || c == 0xfeff
+// ctrlAt reports whether RE_CTRL,
+// /[\u0000-\u001F\u007F-\u009F\u2000-\u200D\uFEFF\uD800-\uDFFF\uFFFE\uFFFF]/gimu, matches
+// at u[i], and how many units to step past. The u flag reads a surrogate pair as one code
+// point outside the class, so only lone surrogates match.
+func ctrlAt(u units, i int) (bool, int) {
+	c := u[i]
+	if c >= 0xd800 && c <= 0xdbff && i+1 < len(u) && u[i+1] >= 0xdc00 && u[i+1] <= 0xdfff {
+		return false, 2
+	}
+	return c <= 0x1f || c >= 0x7f && c <= 0x9f || c >= 0x2000 && c <= 0x200d || c == 0xfeff ||
+		c >= 0xd800 && c <= 0xdfff || c == 0xfffe || c == 0xffff, 1
+}
+
+func hasCtrl(u units) bool {
+	for i := 0; i < len(u); {
+		ctrl, n := ctrlAt(u, i)
+		if ctrl {
+			return true
+		}
+		i += n
+	}
+	return false
 }
 
 // decodeURIComponent returns decodeURIComponent(u), or false where it throws a URIError.
@@ -128,10 +147,12 @@ func decode(u units) units {
 
 func removeCtrl(u units) units {
 	out := make(units, 0, len(u))
-	for _, c := range u {
-		if !isCtrl(c) {
-			out = append(out, c)
+	for i := 0; i < len(u); {
+		ctrl, n := ctrlAt(u, i)
+		if !ctrl {
+			out = append(out, u[i:i+n]...)
 		}
+		i += n
 	}
 	return out
 }
@@ -323,14 +344,7 @@ func SanitizeURL(url string) string {
 		decoded = removeCtrl(decoded)
 		decoded = removeMatches(decoded, wsEscapeAt).trim()
 		decoded = decode(decoded)
-		more := false
-		for _, c := range decoded {
-			if isCtrl(c) {
-				more = true
-				break
-			}
-		}
-		if !more && !anyMatch(decoded, func(u units, i int) int { end, _ := entityAt(u, i); return end }) &&
+		if !hasCtrl(decoded) && !anyMatch(decoded, func(u units, i int) int { end, _ := entityAt(u, i); return end }) &&
 			!anyMatch(decoded, ctrlEntityAt) && !anyMatch(decoded, wsEscapeAt) {
 			break
 		}
@@ -430,6 +444,23 @@ func ImageURL(url string, options core.Options) (string, bool) {
 		return "", false
 	}
 	return allow(url, orDefault(options.ImageSchemes, imageSchemes))
+}
+
+// InternalLink reports whether an internal link's name may be its href. The href keeps the
+// original name, so sanitizing alone is not enough.
+func InternalLink(name string, options core.Options) bool {
+	url := SanitizeURL(name)
+	if url == blank {
+		return false
+	}
+	if _, ok := LinkURL(url, options); !ok {
+		return false
+	}
+	// Match character removal by Esc and the browser.
+	seen := strings.NewReplacer("\t", "", "\n", "", "\r", "").Replace(svg.DropInvalidXML(name))
+	seen = strings.TrimLeft(seen, "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f ")
+	_, ok := LinkURL(seen, options)
+	return ok
 }
 
 // Linked wraps body in a link to url, when the host allows it, and records the link.

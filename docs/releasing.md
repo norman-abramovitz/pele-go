@@ -4,8 +4,8 @@
 
 pele-go has its own semver tags, which change with changes here, separately from upstream's
 version numbers. The upstream release it matches is in `pele.UpstreamVersion` and the
-commit that release's tag points to is in `pele.UpstreamCommit`. Currently that's Pele 1.9.0,
-commit `e7f092a4de147cc32210913c20e36eaa5fcd0ef1`.
+commit that release's tag points to is in `pele.UpstreamCommit`. Currently that's Pele 1.9.1,
+commit `3052498a453ebb8c8e4cb79e694232ba3c7d9021`.
 
 ## Following upstream releases
 
