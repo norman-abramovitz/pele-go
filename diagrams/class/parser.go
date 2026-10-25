@@ -43,7 +43,7 @@ type frame struct {
 	notes   []string
 }
 
-func parseClassDiagram(source string, db *classDb) {
+func parseClassDiagram(source string, db *classDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	toks := tokenize(src)
 	types, texts, starts := toks.types, toks.texts, toks.starts
@@ -58,9 +58,9 @@ func parseClassDiagram(source string, db *classDb) {
 	fail := func(expected string) {
 		t := types[i]
 		if t == tError {
-			perr.Throw(perr.SyntaxError("class", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "class", src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError("class", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "class", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 	}
 
 	expect := func(typ int) string {

@@ -34,7 +34,12 @@ func option(config *jsobj.Object, key string, fallback, least, most float64) flo
 
 func relativeRadius(value, lo, hi, radius float64) float64 {
 	clipped := min(max(value, lo), hi)
-	return float64(radius*(clipped-lo)) / (hi - lo)
+	scaled := float64(radius * (clipped - lo))
+	// Keep the original rounding unless multiplication overflows.
+	if !math.IsInf(scaled, 0) && !math.IsNaN(scaled) {
+		return scaled / (hi - lo)
+	}
+	return radius * float64((clipped-lo)/(hi-lo))
 }
 
 // closedRoundCurve is a closed Catmull-Rom spline through the points, as cubic Bézier

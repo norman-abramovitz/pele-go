@@ -11,7 +11,7 @@ import (
 func parse(t *testing.T, source string) *requirementDb {
 	t.Helper()
 	db := newRequirementDb()
-	parseRequirement(source, db)
+	parseRequirement(source, db, nil)
 	return db
 }
 
@@ -25,7 +25,7 @@ func parseErr(t *testing.T, source string) (err *perr.Error) {
 		}
 		err = e
 	}()
-	parseRequirement(source, newRequirementDb())
+	parseRequirement(source, newRequirementDb(), nil)
 	return nil
 }
 

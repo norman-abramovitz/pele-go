@@ -4,6 +4,7 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"github.com/Broderick-Westrope/pele-go/internal/util"
 )
 
@@ -367,8 +368,8 @@ type wardleyAst struct {
 	deaccelerators            []placedAst
 }
 
-func parseWardley(src string) wardleyAst {
-	r := common.NewReader(wardleyLexer.Tokenize(common.Src(jsstr.UTF16(src)), "wardley"), wardleyTokens, "wardley")
+func parseWardley(src string, o *perr.Origin) wardleyAst {
+	r := common.NewReader(wardleyLexer.Tokenize(common.Src(jsstr.UTF16(src)), "wardley", o), wardleyTokens, "wardley", o)
 	var ast wardleyAst
 
 	at := func(kind int) bool { return r.Tokens.Kinds[r.I] == kind }

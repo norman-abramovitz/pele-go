@@ -3,6 +3,7 @@ package railroad
 import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 )
 
 // `railroad-ebnf-beta`: EBNF in the W3C and ISO 14977 styles.
@@ -189,8 +190,8 @@ func ebnfDefinition(r *common.Reader) *syntax {
 	}
 }
 
-func parseEbnf(src string) (parsed, []syntaxRule) {
-	return parseGrammar(src, ebnfLexer, ebnfTitle, unescape, func(r *common.Reader) syntaxRule {
+func parseEbnf(src string, o *perr.Origin) (parsed, []syntaxRule) {
+	return parseGrammar(src, o, ebnfLexer, ebnfTitle, unescape, func(r *common.Reader) syntaxRule {
 		name := r.Expect(ebnfID)
 		if !r.Accept(ebnfEquals) {
 			r.Expect(ebnfDefines)

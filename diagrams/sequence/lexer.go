@@ -362,7 +362,15 @@ func tokenize(src common.Src) tokens {
 		if legacy {
 			q++
 		}
-		if !util.IsSpace(at(q)) || q+1 >= n || !has(q+1, cLine) {
+		e := q
+		for e < n && at(e) != 10 && util.IsSpace(at(e)) {
+			e++
+		}
+		if e == n || at(e) == 10 {
+			p = e
+			return true
+		}
+		if sep := at(q); !util.IsSpace(sep) || sep == 13 || q+1 >= n || !has(q+1, cLine) {
 			return false
 		}
 		emit(pick(legacy, tLegacyTitle, tTitle), p, lineRun(q+1))
@@ -451,10 +459,6 @@ func tokenize(src common.Src) tokens {
 			return
 		}
 		if c == 35 || (c == 37 && at(p+1) != 123) {
-			p = eol(p)
-			return
-		}
-		if c != 125 && at(p+1) == 37 && at(p+2) == 37 {
 			p = eol(p)
 			return
 		}

@@ -8,7 +8,7 @@ import (
 
 const statement = "'EOF', 'SPACE', 'NEWLINE', 'title', 'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'section', 'period', 'event'"
 
-func parseTimeline(src common.Src, db *timelineDb) {
+func parseTimeline(src common.Src, db *timelineDb, o *perr.Origin) {
 	toks := tokenize(src)
 	types, texts, starts := toks.Types, toks.Texts, toks.Starts
 
@@ -17,7 +17,7 @@ func parseTimeline(src common.Src, db *timelineDb) {
 		if types[i] == tEnd {
 			got = "1"
 		}
-		perr.Throw(perr.SyntaxError("timeline", src, starts[i], "Expecting "+expected+", got '"+got+"'", false))
+		perr.Throw(perr.SyntaxError(o, "timeline", src, starts[i], "Expecting "+expected+", got '"+got+"'", false))
 	}
 
 	head := types[0]

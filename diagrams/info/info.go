@@ -16,8 +16,8 @@ import (
 // Diagram is the info diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "info",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
-		return buildInfo(parseInfo(source), title)
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
+		return buildInfo(parseInfo(source, limits.Origin), title)
 	},
 	Render: func(m any, _ *jsobj.Object, rc *core.Context) core.Rendered {
 		return renderInfo(m.(model), rc)

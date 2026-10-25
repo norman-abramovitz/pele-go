@@ -36,7 +36,7 @@ type frame struct {
 }
 
 // parseEr panics with a *perr.Error on a syntax error.
-func parseEr(source string, db *erDb) {
+func parseEr(source string, db *erDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	tk := tokenize(src)
 	types, texts, starts := tk.types, tk.texts, tk.starts
@@ -49,13 +49,13 @@ func parseEr(source string, db *erDb) {
 	fail := func(expected string) {
 		t := kind()
 		if t == tError {
-			perr.Throw(perr.SyntaxError("er", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "er", src, starts[i], "", true))
 		}
 		got := tokenNames[t]
 		if t == tChar {
 			got = texts[i]
 		}
-		perr.Throw(perr.SyntaxError("er", src, starts[i], "Expecting "+expected+", got '"+got+"'", false))
+		perr.Throw(perr.SyntaxError(o, "er", src, starts[i], "Expecting "+expected+", got '"+got+"'", false))
 	}
 
 	expect := func(typ int) string {

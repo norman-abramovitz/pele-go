@@ -3,6 +3,7 @@ package treeview
 import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"github.com/Broderick-Westrope/pele-go/internal/util"
 )
 
@@ -214,8 +215,8 @@ func convertValue(rule, input string) string {
 	return ""
 }
 
-func parseTreeView(src string) treeViewAst {
-	r := common.NewReader(treeViewLexer.Tokenize(jsstr.UTF16(src), "treeView"), treeViewLexer.Types(), "treeView")
+func parseTreeView(src string, o *perr.Origin) treeViewAst {
+	r := common.NewReader(treeViewLexer.Tokenize(jsstr.UTF16(src), "treeView", o), treeViewLexer.Types(), "treeView", o)
 	var ast treeViewAst
 	r.Expect(kindKeyword)
 	for {

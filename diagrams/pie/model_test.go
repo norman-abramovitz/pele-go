@@ -17,7 +17,7 @@ func parse(t *testing.T, src string) (m model, err *perr.Error) {
 			err = e
 		}
 	}()
-	return buildPie(parsePie(src), nil), nil
+	return buildPie(parsePie(src, nil), nil), nil
 }
 
 // Ported from tests/compat/pie/pie.spec.ts.

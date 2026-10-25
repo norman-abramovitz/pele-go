@@ -18,7 +18,7 @@ func parse(src string) (db *mindmapDb, err *perr.Error) {
 		}
 	}()
 	db = &mindmapDb{}
-	parseMindmap(src, db)
+	parseMindmap(src, db, nil)
 	return db, nil
 }
 

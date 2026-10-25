@@ -10,12 +10,12 @@ import (
 var Diagram = &core.Diagram{
 	Type: "usecase",
 	Math: true,
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		t := ""
 		if title != nil {
 			t = *title
 		}
-		return parseUsecase(source, t)
+		return parseUsecase(source, t, limits.Origin)
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {
 		return renderUsecase(m.(*usecaseModel), config, rc)

@@ -9,8 +9,8 @@ import (
 // Diagram is the gitGraph diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "gitGraph",
-	Parse: func(source string, config *jsobj.Object, title *string, _ int, _ core.Limits) any {
-		return buildGit(parseGit(source), config, title)
+	Parse: func(source string, config *jsobj.Object, title *string, _ int, limits core.Limits) any {
+		return buildGit(parseGit(source, limits.Origin), config, title)
 	},
 	Render: func(model any, config *jsobj.Object, rc *core.Context) core.Rendered {
 		return renderGit(model.(*gitModel), config, rc)

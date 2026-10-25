@@ -10,8 +10,8 @@ import (
 // Diagram is the railroad diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "railroad",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
-		return parseRailroad(source, title)
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
+		return parseRailroad(source, title, limits.Origin)
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {
 		return renderRailroad(m.(*railroadDb), config, rc)

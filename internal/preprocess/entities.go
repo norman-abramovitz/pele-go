@@ -22,7 +22,9 @@ func lineEnd(text string, from int) (int, int) {
 // dropColorSemicolons does what Mermaid's text.replace(/keyword.*:\S*#.*;/g, drop the last
 // character) does: on a line where the keyword is followed by a colon, a color-like #, and
 // later a semicolon, the last semicolon goes.
-func dropColorSemicolons(text, keyword string) string {
+func dropColorSemicolons(text, keyword string, steps *Steps) string {
+	var edits [][3]int
+	defer func() { steps.push(text, edits) }()
 	from := strings.Index(text, keyword)
 	if from == -1 {
 		return text
@@ -52,6 +54,7 @@ func dropColorSemicolons(text, keyword string) string {
 		}
 		if hash != -1 {
 			if semi := strings.LastIndexByte(text[:end], ';'); semi > hash {
+				edits = append(edits, [3]int{semi, semi + 1, 0})
 				out.WriteString(text[last:semi])
 				last = semi + 1
 			}
@@ -82,12 +85,14 @@ func isDigits(s string) bool {
 
 // EncodeEntities hides #name; entity codes behind Mermaid's placeholder characters so # and
 // ; survive parsing.
-func EncodeEntities(text string) string {
+func EncodeEntities(text string, steps *Steps) string {
 	if !strings.Contains(text, "#") {
 		return text
 	}
-	text = dropColorSemicolons(dropColorSemicolons(text, "style"), "classDef")
+	text = dropColorSemicolons(dropColorSemicolons(text, "style", steps), "classDef", steps)
 	var out strings.Builder
+	var edits [][3]int
+	defer func() { steps.push(text, edits) }()
 	last := 0
 	for i := 0; i < len(text); i++ {
 		if text[i] != '#' {
@@ -101,8 +106,10 @@ func EncodeEntities(text string) string {
 		out.WriteString(text[last:i])
 		if isDigits(inner) {
 			out.WriteString("ﬂ°°")
+			edits = append(edits, [3]int{i, w + 1, 3 + len(inner) + 2})
 		} else {
 			out.WriteString("ﬂ°")
+			edits = append(edits, [3]int{i, w + 1, 2 + len(inner) + 2})
 		}
 		out.WriteString(inner)
 		out.WriteString("¶ß")

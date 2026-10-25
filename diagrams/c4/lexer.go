@@ -202,8 +202,14 @@ func tokenize(src common.Src) tokens {
 					}
 				}
 			}
-			if c == 116 && statement("title", tTitle) {
-				continue
+			if c == 116 {
+				if e := bareTitle(src, p); e >= 0 {
+					p = e
+					continue
+				}
+				if statement("title", tTitle) {
+					continue
+				}
 			}
 			if c == 97 {
 				if statement("accDescription", tAccDescription) {
@@ -402,4 +408,23 @@ func tokenize(src common.Src) tokens {
 		}
 	}
 	return out
+}
+
+// bareTitle matches /title[^\S\r\n]*(?=[\r\n]|$)\s*/y, returning its end or -1. It consumes
+// line breaks too: the grammar rejects blank statements.
+func bareTitle(src common.Src, p int) int {
+	if !src.HasPrefix(p, "title") {
+		return -1
+	}
+	e := p + len("title")
+	for e < len(src) && src[e] != '\r' && src[e] != '\n' && util.IsSpace(int(src[e])) {
+		e++
+	}
+	if e < len(src) && src[e] != '\r' && src[e] != '\n' {
+		return -1
+	}
+	for e < len(src) && util.IsSpace(int(src[e])) {
+		e++
+	}
+	return e
 }

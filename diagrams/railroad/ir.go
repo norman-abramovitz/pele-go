@@ -1,6 +1,9 @@
 package railroad
 
-import "github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
+import (
+	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
+)
 
 // `railroad-beta`: Mermaid's own notation, one constructor call per node.
 
@@ -96,8 +99,8 @@ func irExpression(r *common.Reader) *syntax {
 	}
 }
 
-func parseIr(src string) (parsed, []syntaxRule) {
-	return parseGrammar(src, irLexer, irTitle, unescape, func(r *common.Reader) syntaxRule {
+func parseIr(src string, o *perr.Origin) (parsed, []syntaxRule) {
+	return parseGrammar(src, o, irLexer, irTitle, unescape, func(r *common.Reader) syntaxRule {
 		name := r.Expect(irID)
 		r.Expect(irEquals)
 		definition := irExpression(r)

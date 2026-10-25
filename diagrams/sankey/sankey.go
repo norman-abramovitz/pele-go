@@ -10,12 +10,12 @@ import (
 // Diagram is the sankey diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "sankey",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newSankeyDb()
 		if title != nil && *title != "" {
 			db.title = *title
 		}
-		parseSankey(prepareTextForParsing(source), db)
+		parseSankey(prepareTextForParsing(source, nil), db, source, limits.Origin)
 		return db
 	},
 	Render: func(model any, config *jsobj.Object, rc *core.Context) core.Rendered {

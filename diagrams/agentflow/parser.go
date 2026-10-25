@@ -48,11 +48,10 @@ var directions = [...]string{"TB", "BT", "RL", "LR", "TD"}
 
 const statementStart = "'COMMENT', 'SEMI', 'NEWLINE', 'SPACE', 'EOF', 'flow', 'global', 'connector', 'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'STYLE', 'LINKSTYLE', 'CLASSDEF', 'CLASS', 'CLICK', 'NODE_STRING'"
 
-// trimBraceTrail is source.replace(/}[^\S\n]*\n/g, '}\n'): Mermaid trims spaces and tabs
-// between a closing brace and the end of its line before parsing.
-func trimBraceTrail(src common.Src) common.Src {
-	var out common.Src
-	last := 0
+// braceTrails returns the matches of /}[^\S\n]*\n/g in src, each replaced by the two
+// characters `}\n`.
+func braceTrails(src common.Src) []perr.Edit {
+	var edits []perr.Edit
 	for i := 0; i < len(src); i++ {
 		if src[i] != '}' {
 			continue
@@ -64,19 +63,35 @@ func trimBraceTrail(src common.Src) common.Src {
 		if j >= len(src) || src[j] != '\n' {
 			continue
 		}
-		out = append(out, src[last:i+1]...)
-		out = append(out, '\n')
-		last = j + 1
+		edits = append(edits, perr.Edit{From: i, To: j + 1, Length: 2})
 		i = j
 	}
-	if out == nil {
+	return edits
+}
+
+// trimBraceTrail is source.replace(/}[^\S\n]*\n/g, '}\n'): Mermaid trims spaces and tabs
+// between a closing brace and the end of its line before parsing.
+func trimBraceTrail(src common.Src, edits []perr.Edit) common.Src {
+	if edits == nil {
 		return src
+	}
+	var out common.Src
+	last := 0
+	for _, e := range edits {
+		out = append(out, src[last:e.From+1]...)
+		out = append(out, '\n')
+		last = e.To
 	}
 	return append(out, src[last:]...)
 }
 
 type parser struct {
-	src         common.Src
+	src common.Src
+	// source is the text before trimBraceTrail, edits what it changed, and origin locates
+	// errors in source.
+	source      common.Src
+	edits       []perr.Edit
+	origin      *perr.Origin
 	toks        tokens
 	i           int
 	db          *agentflowDb
@@ -89,10 +104,11 @@ func (p *parser) kind() int { return p.toks.types[p.i] }
 
 func (p *parser) fail(expected string) {
 	t := p.toks.types[p.i]
+	at := perr.InputOffset([][]perr.Edit{p.edits}, p.toks.starts[p.i])
 	if t == tError {
-		perr.Throw(perr.SyntaxError("agentflow", p.src, p.toks.starts[p.i], "", true))
+		perr.Throw(perr.SyntaxError(p.origin, "agentflow", p.source, at, "", true))
 	}
-	perr.Throw(perr.SyntaxError("agentflow", p.src, p.toks.starts[p.i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+	perr.Throw(perr.SyntaxError(p.origin, "agentflow", p.source, at, "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 }
 
 // span is the span from the start of token a to the end of token b.
@@ -694,12 +710,15 @@ loop:
 
 // parseAgentflow parses source into db. raw parses the text as it is, the way Mermaid's
 // generated parser does without its wrapper.
-func parseAgentflow(source string, db *agentflowDb, raw bool) {
-	src := common.Src(jsstr.UTF16(source))
+func parseAgentflow(source string, db *agentflowDb, raw bool, o *perr.Origin) {
+	text := common.Src(jsstr.UTF16(source))
+	src := text
+	var edits []perr.Edit
 	if !raw && src.Index("}", 0) >= 0 {
-		src = trimBraceTrail(src)
+		edits = braceTrails(src)
+		src = trimBraceTrail(src, edits)
 	}
-	p := &parser{src: src, toks: tokenize(src), db: db}
+	p := &parser{src: src, source: text, edits: edits, origin: o, toks: tokenize(src), db: db}
 
 	for p.kind() == tSpace || p.kind() == tNewline || p.kind() == tComment {
 		p.i++

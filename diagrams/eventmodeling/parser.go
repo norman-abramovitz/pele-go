@@ -3,6 +3,7 @@ package eventmodeling
 import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"github.com/Broderick-Westrope/pele-go/internal/util"
 )
 
@@ -287,9 +288,9 @@ type eventModelAst struct {
 	source                    common.Src
 }
 
-func parseEventModel(source string) eventModelAst {
+func parseEventModel(source string, o *perr.Origin) eventModelAst {
 	src := jsstr.UTF16(source)
-	r := common.NewReader(emLexer.Tokenize(src, "eventmodeling"), emLexer.Types(), "eventmodeling")
+	r := common.NewReader(emLexer.Tokenize(src, "eventmodeling", o), emLexer.Types(), "eventmodeling", o)
 	a := eventModelAst{source: src}
 	at := func(kind int) bool { return r.Kind() == kind }
 	one := func(set map[int]bool, expected string) string {

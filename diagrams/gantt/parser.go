@@ -25,7 +25,7 @@ var startsLine = func() [tEOF + 1]bool {
 	return s
 }()
 
-func parseGantt(source string, db *ganttDb) {
+func parseGantt(source string, db *ganttDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	toks := tokenize(src)
 	i := 0
@@ -39,7 +39,7 @@ func parseGantt(source string, db *ganttDb) {
 		if t != tEND {
 			got = tokenNames[t]
 		}
-		perr.Throw(perr.SyntaxError("gantt", src, toks.starts[i], "Expecting "+expected+", got '"+got+"'", false))
+		perr.Throw(perr.SyntaxError(o, "gantt", src, toks.starts[i], "Expecting "+expected+", got '"+got+"'", false))
 	}
 	// Mermaid's parser runs a statement's action only after seeing that the next token can
 	// follow it.

@@ -11,8 +11,8 @@ import (
 var Diagram = &core.Diagram{
 	Type:    "wardley",
 	Section: "wardley-beta",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
-		return buildWardley(parseWardley(source), title)
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
+		return buildWardley(parseWardley(source, limits.Origin), title)
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {
 		return renderWardley(m.(wardleyModel), config, rc)

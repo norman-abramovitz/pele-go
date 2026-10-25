@@ -8,7 +8,7 @@ import (
 
 const statement = "'EOF', 'SPACE', 'NEWLINE', 'title', 'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'section', 'taskName'"
 
-func parseJourney(src common.Src, db *journeyDb) {
+func parseJourney(src common.Src, db *journeyDb, o *perr.Origin) {
 	toks := tokenize(src)
 	types, texts, starts := toks.Types, toks.Texts, toks.Starts
 
@@ -17,7 +17,7 @@ func parseJourney(src common.Src, db *journeyDb) {
 		if types[i] == tEnd {
 			got = "1"
 		}
-		perr.Throw(perr.SyntaxError("journey", src, starts[i], "Expecting "+expected+", got '"+got+"'", false))
+		perr.Throw(perr.SyntaxError(o, "journey", src, starts[i], "Expecting "+expected+", got '"+got+"'", false))
 	}
 
 	if types[0] != tJourney {

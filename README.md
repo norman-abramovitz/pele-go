@@ -1,7 +1,7 @@
 # pele-go
 
 Mermaid diagrams to SVG in pure Go. It's a port of [Pele](https://github.com/obsidianmd/pele)
-that produces the same output as Pele 1.9.1 byte for byte, with all 33 diagram types, no
+that produces the same output as Pele 1.10.0 byte for byte, with all 33 diagram types, no
 cgo and no JavaScript runtime.
 
 ![A flowchart from Mermaid source through pele-go and resvg to PNG](raster/cmd/pele/examples/pipeline.png)

@@ -11,10 +11,10 @@ import (
 var Diagram = &core.Diagram{
 	Type:    "xychart",
 	Section: "xyChart",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newXyChartDb()
 		db.title = title
-		parseXyChart(source, db)
+		parseXyChart(source, db, limits.Origin)
 		return db
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {

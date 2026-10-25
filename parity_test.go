@@ -258,8 +258,9 @@ var testZones = []string{"UTC", "Australia/Sydney"}
 // as goja's Date parses strings and resolves local times unlike V8, and usecase, whose errors
 // quote the message of JSON.parse, which goja words unlike V8, and railroad and wardley,
 // whose repeat counts and annotation numbers print numbers past 2^64, which goja formats
-// unlike V8.
-var refereedTypes = map[string]bool{"gantt": true, "usecase": true, "railroad": true, "wardley": true}
+// unlike V8, and sankey and sequence, whose titles and value affixes keep lone surrogates
+// from YAML and JSON escapes as U+FFFD in goja, where V8 keeps them for the port to drop.
+var refereedTypes = map[string]bool{"gantt": true, "usecase": true, "railroad": true, "wardley": true, "sankey": true, "sequence": true}
 
 // zonesOf returns the zones a type's cases run in: "" alone, the process's own, for a type
 // the zone does not reach.

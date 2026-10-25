@@ -1,6 +1,7 @@
 package architecture
 
 import (
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"strings"
 
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
@@ -212,8 +213,8 @@ func labelValue(text string) string {
 	return jsstr.Trim(result)
 }
 
-func parseArchitecture(src string) architectureAst {
-	r := common.NewReader(architectureLexer.Tokenize(jsstr.UTF16(src), "architecture"), architectureLexer.Types(), "architecture")
+func parseArchitecture(src string, o *perr.Origin) architectureAst {
+	r := common.NewReader(architectureLexer.Tokenize(jsstr.UTF16(src), "architecture", o), architectureLexer.Types(), "architecture", o)
 	var a architectureAst
 
 	is := func(kind int) bool { return r.Kind() == kind }

@@ -18,7 +18,7 @@ func build(t *testing.T, source string) (db *architectureDb, err *perr.Error) {
 		}
 	}()
 	db = newArchitectureDb()
-	populate(parseArchitecture(source), db)
+	populate(parseArchitecture(source, nil), db)
 	return db, nil
 }
 

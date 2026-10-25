@@ -1,6 +1,7 @@
 package treemap
 
 import (
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"strings"
 
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
@@ -182,9 +183,9 @@ type treemapAst struct {
 	rows                      []rowAst
 }
 
-func parseTreemap(source string) treemapAst {
+func parseTreemap(source string, o *perr.Origin) treemapAst {
 	src := common.Src(jsstr.UTF16(source))
-	r := common.NewReader(treemapLexer.Tokenize(src, "treemap"), treemapLexer.Types(), "treemap")
+	r := common.NewReader(treemapLexer.Tokenize(src, "treemap", o), treemapLexer.Types(), "treemap", o)
 	kinds := r.Tokens.Kinds
 	var ast treemapAst
 

@@ -4,6 +4,7 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"github.com/Broderick-Westrope/pele-go/internal/util"
 )
 
@@ -229,9 +230,9 @@ type radarAst struct {
 	options                   []optionAst
 }
 
-func parseRadar(source string) radarAst {
-	tokens := radarLexer.Tokenize(jsstr.UTF16(source), "radar")
-	r := common.NewReader(tokens, radarLexer.Types(), "radar")
+func parseRadar(source string, o *perr.Origin) radarAst {
+	tokens := radarLexer.Tokenize(jsstr.UTF16(source), "radar", o)
+	r := common.NewReader(tokens, radarLexer.Types(), "radar", o)
 	var ast radarAst
 
 	newlines := func() {

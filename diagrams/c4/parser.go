@@ -65,7 +65,7 @@ func isDiagram(t int) bool {
 // parseC4 accepts what the parser Jison generates from c4Diagram.jison accepts, and calls the
 // model builder in the order its semantic actions do. Boundaries nest through a counter, not
 // recursion.
-func parseC4(source string, db *c4Db) {
+func parseC4(source string, db *c4Db, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	toks := tokenize(src)
 	types, starts, ends := toks.types, toks.starts, toks.ends
@@ -75,9 +75,9 @@ func parseC4(source string, db *c4Db) {
 	fail := func(expected string) {
 		t := types[i]
 		if t == tERROR {
-			perr.Throw(perr.SyntaxError("c4", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "c4", src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError("c4", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "c4", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 	}
 	expect := func(typ int) {
 		if types[i] != typ {

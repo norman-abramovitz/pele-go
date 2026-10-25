@@ -1,6 +1,7 @@
 package railroad
 
 import (
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"strings"
 
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
@@ -185,8 +186,8 @@ func abnfAlternation(r *common.Reader) *syntax {
 	}
 }
 
-func parseAbnf(src string) (parsed, []syntaxRule) {
-	return parseGrammar(src, abnfLexer, abnfTitle, sliceInner, func(r *common.Reader) syntaxRule {
+func parseAbnf(src string, o *perr.Origin) (parsed, []syntaxRule) {
+	return parseGrammar(src, o, abnfLexer, abnfTitle, sliceInner, func(r *common.Reader) syntaxRule {
 		name := r.Expect(abnfName)
 		r.Expect(abnfEquals)
 		definition := abnfAlternation(r)

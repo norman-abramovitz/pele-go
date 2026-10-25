@@ -135,7 +135,7 @@ func TestCases(t *testing.T) {
 	})
 	fixture.Run(t, "testdata/cases.json", map[string]fixture.Func{
 		"tokenize": func(a fixture.Args) any {
-			r := lexer.Tokenize(src(a.Str(0)), "test")
+			r := lexer.Tokenize(src(a.Str(0)), "test", nil)
 			return map[string]any{"kinds": ints(r.Kinds), "starts": ints(r.Starts), "ends": ints(r.Ends)}
 		},
 		"stringValue": func(a fixture.Args) any { return common.StringValue(a.Str(0)) },
@@ -151,7 +151,7 @@ func TestCases(t *testing.T) {
 		"tokenizeOutline": func(a fixture.Args) any { return textTokens(common.TokenizeOutline(src(a.Str(0)), a.Bool(1))) },
 		"parseOutline": func(a fixture.Args) any {
 			var r recorder
-			common.ParseOutline(src(a.Str(0)), &r, a.Bool(1))
+			common.ParseOutline(src(a.Str(0)), &r, a.Bool(1), nil)
 			return r.calls
 		},
 		"parseGenericTypes": func(a fixture.Args) any { return common.ParseGenericTypes(a.Str(0)) },

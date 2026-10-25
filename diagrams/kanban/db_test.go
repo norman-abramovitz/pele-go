@@ -9,7 +9,7 @@ import (
 
 func parse(source string) *kanbanDb {
 	db := &kanbanDb{}
-	parseKanban(jsstr.UTF16(source), db)
+	parseKanban(jsstr.UTF16(source), db, nil)
 	return db
 }
 

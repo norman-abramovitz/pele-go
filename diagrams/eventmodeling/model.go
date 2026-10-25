@@ -125,11 +125,11 @@ func blockText(raw string) string {
 	return strings.Join(out, "\n")
 }
 
-func buildEventModel(a eventModelAst, title *string) *eventModelingModel {
+func buildEventModel(a eventModelAst, title *string, o *perr.Origin) *eventModelingModel {
 	ids := map[string]bool{}
 	for _, frame := range a.frames {
 		if ids[frame.name] {
-			line := perr.Locate(a.source, frame.offset).Line
+			line := perr.Locate(o, a.source, frame.offset).Line
 			e := perr.New(`Duplicate event modeling frame ID "`+frame.name+`" on line `+strconv.Itoa(line), perr.Semantic)
 			e.Type = "eventmodeling"
 			e.Line = line

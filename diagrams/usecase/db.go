@@ -224,7 +224,7 @@ func strPtr(s string) *string { return &s }
 // which ids are actors, use cases, boundaries, JSON nodes or edges, in what order they appear,
 // and whether the statements about them agree. Ports Mermaid's UsecaseModelBuilder, with its
 // messages.
-func resolveUsecase(src common.Src, d *drafts, title string) *usecaseModel {
+func resolveUsecase(src common.Src, d *drafts, title string, o *perr.Origin) *usecaseModel {
 	model := emptyModel()
 	actors := &model.actors
 	useCases := &model.useCases
@@ -236,10 +236,10 @@ func resolveUsecase(src common.Src, d *drafts, title string) *usecaseModel {
 	// The offset at which each id is first mentioned, which decides the order of the model.
 	first := map[string]int{}
 
-	at := func(s span) string { return locationText(src, s[0], s[1]) }
+	at := func(s span) string { return locationText(o, src, s[0], s[1]) }
 
 	newError := func(message string, s span) *perr.Error {
-		line, column := lineColumn(src, s[0])
+		line, column := lineColumn(o, src, s[0])
 		return &perr.Error{Code: perr.Semantic, Message: message, Type: "usecase", Line: line, Column: column}
 	}
 

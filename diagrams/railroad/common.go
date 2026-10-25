@@ -1,6 +1,7 @@
 package railroad
 
 import (
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"math"
 
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
@@ -191,8 +192,8 @@ type syntaxRule struct {
 // parseGrammar parses the keyword, then any titles and accessibility statements, then rules
 // to the end of the text. Every table starts with its keyword and has TITLE, ACC_TITLE, and
 // ACC_DESCR in a row from meta.
-func parseGrammar(src string, lexer *common.Lexer, meta int, unquote func(string) string, rule func(r *common.Reader) syntaxRule) (parsed, []syntaxRule) {
-	r := common.NewReader(lexer.Tokenize(jsstr.UTF16(src), "railroad"), lexer.Types(), "railroad")
+func parseGrammar(src string, o *perr.Origin, lexer *common.Lexer, meta int, unquote func(string) string, rule func(r *common.Reader) syntaxRule) (parsed, []syntaxRule) {
+	r := common.NewReader(lexer.Tokenize(jsstr.UTF16(src), "railroad", o), lexer.Types(), "railroad", o)
 	var ast parsed
 	var rules []syntaxRule
 	r.Expect(0)

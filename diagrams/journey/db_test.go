@@ -11,7 +11,7 @@ import (
 func parse(t *testing.T, source string) *journeyDb {
 	t.Helper()
 	db := &journeyDb{}
-	parseJourney(jsstr.UTF16(source), db)
+	parseJourney(jsstr.UTF16(source), db, nil)
 	return db
 }
 

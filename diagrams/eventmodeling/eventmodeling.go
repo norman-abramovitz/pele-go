@@ -10,8 +10,8 @@ import (
 var Diagram = &core.Diagram{
 	Type:         "eventmodeling",
 	KeepComments: true,
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
-		return buildEventModel(parseEventModel(source), title)
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
+		return buildEventModel(parseEventModel(source, limits.Origin), title, limits.Origin)
 	},
 	Render: func(model any, _ *jsobj.Object, rc *core.Context) core.Rendered {
 		return renderEventModel(model.(*eventModelingModel), rc)

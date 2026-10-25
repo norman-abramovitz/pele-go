@@ -104,6 +104,7 @@ type parser struct {
 	drafts      *drafts
 	parent      *draftBoundary
 	pendingJSON []pendingJSON
+	origin      *perr.Origin
 }
 
 type pendingJSON struct {
@@ -116,14 +117,13 @@ func (ps *parser) image(k int) string { return ps.src.String(ps.starts[k], ps.en
 func (ps *parser) span(k int) span { return span{ps.starts[k], ps.ends[k]} }
 
 func (ps *parser) fail(detail string) {
-	line, column := lineColumn(ps.src, ps.starts[ps.p])
+	line, column := lineColumn(ps.origin, ps.src, ps.starts[ps.p])
 	perr.Throw(&perr.Error{
-		Code: perr.Syntax,
-		Message: "Error parsing usecase diagram: " + detail + " at line " + strconv.Itoa(line) + ", column " + strconv.Itoa(column) +
-			" [" + strconv.Itoa(ps.starts[ps.p]) + "," + strconv.Itoa(ps.ends[ps.p]) + ")",
-		Type:   "usecase",
-		Line:   line,
-		Column: column,
+		Code:    perr.Syntax,
+		Message: "Error parsing usecase diagram: " + detail + " at " + locationText(ps.origin, ps.src, ps.starts[ps.p], ps.ends[ps.p]),
+		Type:    "usecase",
+		Line:    line,
+		Column:  column,
 	})
 }
 
@@ -782,10 +782,10 @@ func (ps *parser) line(top bool) {
 	}
 }
 
-func parseUsecase(source string, title string) *usecaseModel {
+func parseUsecase(source string, title string, o *perr.Origin) *usecaseModel {
 	src := common.Src(jsstr.UTF16(source))
-	toks := tokenize(src)
-	ps := &parser{src: src, types: toks.types, starts: toks.starts, ends: toks.ends, drafts: &drafts{}}
+	toks := tokenize(src, o)
+	ps := &parser{src: src, origin: o, types: toks.types, starts: toks.starts, ends: toks.ends, drafts: &drafts{}}
 	ps.expect(tUsecase)
 	ps.lineEnd()
 	for hasFlag(ps.types[ps.p], flagLine) {
@@ -798,10 +798,10 @@ func parseUsecase(source string, title string) *usecaseModel {
 	for _, pending := range ps.pendingJSON {
 		literal := pending.literal
 		parsed := parseOrderedJSON(src[ps.starts[literal]:ps.ends[literal]], func() (int, int) {
-			return lineColumn(src, ps.starts[literal])
+			return lineColumn(o, src, ps.starts[literal])
 		})
 		pending.json.value = parsed.value
 		pending.json.propertyOrder = parsed.propertyOrder
 	}
-	return resolveUsecase(src, ps.drafts, title)
+	return resolveUsecase(src, ps.drafts, title, o)
 }

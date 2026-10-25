@@ -41,9 +41,7 @@ func KeywordAt(src Src, p int, word string) bool {
 }
 
 // SkipTrivia skips comments and whitespace. It stops at a line break that starts a token,
-// which is a NEWLINE. Jison compiles `\%%` to a single `%`, so one percent sign starts a
-// comment, and the second comment rule takes any character before `%%` with it, a line
-// break included.
+// which is a NEWLINE. Jison compiles `\%%` to `%`, so a single `%` starts a comment.
 func SkipTrivia(src Src, from int) int {
 	n := len(src)
 	p := from
@@ -52,8 +50,6 @@ func SkipTrivia(src Src, from int) int {
 		switch {
 		case c == 37 && src.At(p+1) != 123:
 			p = LineEnd(src, p)
-		case c != 125 && src.At(p+1) == 37 && src.At(p+2) == 37:
-			p = LineEnd(src, p+3)
 		case c == 10:
 			return p
 		case util.IsSpace(c):

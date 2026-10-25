@@ -10,7 +10,7 @@ import (
 
 func parse(source string) *timelineDb {
 	db := newTimelineDb()
-	parseTimeline(jsstr.UTF16(source), db)
+	parseTimeline(jsstr.UTF16(source), db, nil)
 	return db
 }
 

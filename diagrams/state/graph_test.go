@@ -12,7 +12,7 @@ import (
 func parseGraph(t *testing.T, src string) *stateDb {
 	t.Helper()
 	db := newStateDb()
-	parseState(src, db)
+	parseState(src, db, nil)
 	return db
 }
 

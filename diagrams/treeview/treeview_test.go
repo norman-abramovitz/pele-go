@@ -43,7 +43,7 @@ func TestPreprocessBoxDrawing(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, lineMap := preprocessBoxDrawing(strings.Join(tc.input, "\n"))
+			got, lineMap, _ := preprocessBoxDrawing(strings.Join(tc.input, "\n"), nil)
 			if want := strings.Join(tc.want, "\n"); got != want {
 				t.Errorf("text = %q, want %q", got, want)
 			}
@@ -78,7 +78,7 @@ func TestPreprocessBoxDrawingErrors(t *testing.T) {
 					t.Fatalf("threw %v, want %q", e, tc.want)
 				}
 			}()
-			preprocessBoxDrawing(tc.input)
+			preprocessBoxDrawing(tc.input, nil)
 		})
 	}
 }
@@ -94,7 +94,7 @@ func TestReadTreeViewRemapsErrorLines(t *testing.T) {
 			t.Fatalf("line %d, message %q; want line 5", e.Line, e.Message)
 		}
 	}()
-	readTreeView("treeView-beta\n├── a\n│\n└── b\ntitle x\n")
+	readTreeView("treeView-beta\n├── a\n│\n└── b\ntitle x\n", nil)
 }
 
 // Ported from tests/compat/treeview/treeViewValueConverter.test.ts.

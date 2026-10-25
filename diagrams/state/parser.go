@@ -14,7 +14,7 @@ const statement = "'NL', 'ID', 'HIDE_EMPTY', 'scale', 'COMPOSIT_STATE', 'STATE_D
 	"'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'CLICK', 'classDef', 'style', 'class', 'direction_tb', " +
 	"'direction_bt', 'direction_rl', 'direction_lr', 'EDGE_STATE'"
 
-func parseState(source string, db *stateDb) []stmt {
+func parseState(source string, db *stateDb, o *perr.Origin) []stmt {
 	src := common.Src(jsstr.UTF16(source))
 	tk := tokenize(src)
 	types, texts, starts := tk.types, tk.texts, tk.starts
@@ -24,15 +24,15 @@ func parseState(source string, db *stateDb) []stmt {
 		t := types[i]
 		if t == tError {
 			if tk.hasErr {
-				loc := perr.Locate(src, starts[i])
+				loc := perr.Locate(o, src, starts[i])
 				perr.Throw(&perr.Error{
 					Code: perr.Syntax, Message: tk.err, Type: "state",
 					Line: loc.Line, Column: loc.Column, Snippet: loc.Snippet,
 				})
 			}
-			perr.Throw(perr.SyntaxError("state", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "state", src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError("state", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "state", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 	}
 	expect := func(typ int) string {
 		if types[i] != typ {

@@ -36,11 +36,10 @@ var directions = [...]string{"TB", "BT", "RL", "LR", "TD"}
 
 const statementStart = "'SEMI', 'NEWLINE', 'SPACE', 'EOF', 'subgraph', 'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'STYLE', 'LINKSTYLE', 'CLASSDEF', 'CLASS', 'CLICK', 'NODE_STRING'"
 
-// trimBraceLines is source.replace(/}\s*\n/g, '}\n'), which Mermaid does before parsing:
-// \s* backs off to the last line feed in the whitespace after a closing brace.
-func trimBraceLines(src common.Src) common.Src {
-	var out common.Src
-	last := 0
+// braceTrails returns the matches of /}\s*\n/g in src, each replaced by the two characters
+// `}\n`: \s* backs off to the last line feed in the whitespace after a closing brace.
+func braceTrails(src common.Src) []perr.Edit {
+	var edits []perr.Edit
 	for i := 0; i < len(src); i++ {
 		if src[i] != '}' {
 			continue
@@ -54,19 +53,34 @@ func trimBraceLines(src common.Src) common.Src {
 		if end < 0 {
 			continue
 		}
-		out = append(out, src[last:i+1]...)
-		out = append(out, '\n')
-		last = end + 1
+		edits = append(edits, perr.Edit{From: i, To: end + 1, Length: 2})
 		i = end
 	}
-	if out == nil {
+	return edits
+}
+
+// trimBraceLines is source.replace(/}\s*\n/g, '}\n'), which Mermaid does before parsing.
+func trimBraceLines(src common.Src, edits []perr.Edit) common.Src {
+	if edits == nil {
 		return src
+	}
+	var out common.Src
+	last := 0
+	for _, e := range edits {
+		out = append(out, src[last:e.From+1]...)
+		out = append(out, '\n')
+		last = e.To
 	}
 	return append(out, src[last:]...)
 }
 
 type parser struct {
-	src         common.Src
+	src common.Src
+	// source is the text before trimBraceLines, edits what it changed, and origin locates
+	// errors in source.
+	source      common.Src
+	edits       []perr.Edit
+	origin      *perr.Origin
 	toks        tokens
 	i           int
 	db          *FlowDb
@@ -77,10 +91,11 @@ func (p *parser) kind() int { return p.toks.types[p.i] }
 
 func (p *parser) fail(expected string) {
 	t := p.toks.types[p.i]
+	at := perr.InputOffset([][]perr.Edit{p.edits}, p.toks.starts[p.i])
 	if t == tError {
-		perr.Throw(perr.SyntaxError("flowchart", p.src, p.toks.starts[p.i], "", true))
+		perr.Throw(perr.SyntaxError(p.origin, "flowchart", p.source, at, "", true))
 	}
-	perr.Throw(perr.SyntaxError("flowchart", p.src, p.toks.starts[p.i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+	perr.Throw(perr.SyntaxError(p.origin, "flowchart", p.source, at, "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 }
 
 func (p *parser) take() string {
@@ -624,13 +639,16 @@ loop:
 	}
 }
 
-// parseFlowchart parses source into db.
-func parseFlowchart(source string, db *FlowDb) {
-	src := common.Src(jsstr.UTF16(source))
+// parseFlowchart parses source into db, locating errors with o.
+func parseFlowchart(source string, db *FlowDb, o *perr.Origin) {
+	text := common.Src(jsstr.UTF16(source))
+	src := text
+	var edits []perr.Edit
 	if src.Index("}", 0) >= 0 {
-		src = trimBraceLines(src)
+		edits = braceTrails(src)
+		src = trimBraceLines(src, edits)
 	}
-	p := &parser{src: src, toks: tokenize(src), db: db}
+	p := &parser{src: src, source: text, edits: edits, origin: o, toks: tokenize(src), db: db}
 
 	for p.kind() == tSpace || p.kind() == tNewline {
 		p.i++

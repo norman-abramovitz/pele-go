@@ -10,12 +10,12 @@ import (
 // Diagram is the timeline diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "timeline",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newTimelineDb()
 		if title != nil {
 			db.title = *title
 		}
-		parseTimeline(jsstr.UTF16(source), db)
+		parseTimeline(jsstr.UTF16(source), db, limits.Origin)
 		return db
 	},
 	Render: func(model any, config *jsobj.Object, rc *core.Context) core.Rendered {

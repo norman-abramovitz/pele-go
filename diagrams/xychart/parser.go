@@ -19,7 +19,7 @@ var (
 	eolTokens  = flags(tNewline, tSemi, tEOF)
 )
 
-func parseXyChart(source string, db *xyChartDb) {
+func parseXyChart(source string, db *xyChartDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	toks := tokenize(src)
 	types, texts, starts := toks.types, toks.texts, toks.starts
@@ -28,9 +28,9 @@ func parseXyChart(source string, db *xyChartDb) {
 	fail := func(expected string) {
 		t := types[i]
 		if t == tError {
-			perr.Throw(perr.SyntaxError("xychart", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "xychart", src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError("xychart", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "xychart", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 	}
 
 	expect := func(typ int) string {

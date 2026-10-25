@@ -41,7 +41,7 @@ func TestParseIshikawa(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			db := &ishikawaDb{}
-			parseIshikawa(tc.source, db)
+			parseIshikawa(tc.source, db, nil)
 			if got := outline(db.root); got != tc.want {
 				t.Errorf("got %s, want %s", got, tc.want)
 			}

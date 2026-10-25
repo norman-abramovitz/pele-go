@@ -83,7 +83,7 @@ func TestParseRules(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			m := parseRailroad(tc.src, nil)
+			m := parseRailroad(tc.src, nil, nil)
 			if m.notation != tc.notation {
 				t.Errorf("notation = %q, want %q", m.notation, tc.notation)
 			}
@@ -95,11 +95,11 @@ func TestParseRules(t *testing.T) {
 }
 
 func TestParseMetadata(t *testing.T) {
-	m := parseRailroad("railroad-beta\ntitle Example Grammar\naccTitle: Accessible Railroad\naccDescr: Railroad description\nrule = terminal(\"a\") ;", nil)
+	m := parseRailroad("railroad-beta\ntitle Example Grammar\naccTitle: Accessible Railroad\naccDescr: Railroad description\nrule = terminal(\"a\") ;", nil, nil)
 	if m.title != "Example Grammar" || m.accTitle != "Accessible Railroad" || m.accDescr != "Railroad description" {
 		t.Errorf("metadata = %q, %q, %q", m.title, m.accTitle, m.accDescr)
 	}
-	quoted := parseRailroad("railroad-ebnf-beta\ntitle \"Quoted\\tTitle\"\nr = a ;", nil)
+	quoted := parseRailroad("railroad-ebnf-beta\ntitle \"Quoted\\tTitle\"\nr = a ;", nil, nil)
 	if quoted.title != "Quoted\tTitle" {
 		t.Errorf("quoted title = %q", quoted.title)
 	}
@@ -125,7 +125,7 @@ func TestParseErrors(t *testing.T) {
 					t.Errorf("message = %q, want %q", e.Message, tc.want)
 				}
 			}()
-			parseRailroad(tc.src, nil)
+			parseRailroad(tc.src, nil, nil)
 		})
 	}
 }

@@ -11,7 +11,7 @@ import (
 var Diagram = &core.Diagram{
 	Type: "sequence",
 	Math: true,
-	Parse: func(source string, config *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, config *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		var options seqDbOptions
 		if wrap, ok := config.Get("wrap"); ok {
 			if b, ok := wrap.(bool); ok {
@@ -28,7 +28,7 @@ var Diagram = &core.Diagram{
 		if title != nil && *title != "" {
 			db.setDiagramTitle(*title)
 		}
-		parseSequence(jsstr.UTF16(source), db)
+		parseSequence(jsstr.UTF16(source), db, limits.Origin)
 		return db
 	},
 	Render: func(model any, config *jsobj.Object, rc *core.Context) core.Rendered {

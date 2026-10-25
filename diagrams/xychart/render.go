@@ -175,14 +175,17 @@ func renderXyChart(model *xyChartDb, config *jsobj.Object, rc *core.Context) cor
 			bars++
 		}
 	}
-	lo := model.yAxis.min
-	hi := model.yAxis.max
+	lo, ok := finite(model.yAxis.min, true)
+	if !ok {
+		lo = math.Inf(1)
+	}
+	hi, ok := finite(model.yAxis.max, true)
+	if !ok {
+		hi = math.Inf(-1)
+	}
 	isFinite := func(v float64) bool { return !math.IsInf(v, 0) && !math.IsNaN(v) }
 	exact := model.hasSetYAxis && isFinite(lo) && isFinite(hi) && lo != hi
-	if exact {
-		lo, _ = finite(lo, true)
-		hi, _ = finite(hi, true)
-	} else {
+	if !exact {
 		lo = math.Inf(1)
 		hi = math.Inf(-1)
 		for _, p := range plots {

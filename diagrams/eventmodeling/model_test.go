@@ -7,7 +7,7 @@ import (
 // Ported from tests/compat/eventmodeling: namespaces get their own lanes after their group's,
 // and a frame with no sources is fed by the nearest earlier frame in another lane.
 func TestLanesAndRelations(t *testing.T) {
-	m := buildEventModel(parseEventModel("eventmodeling\ntf 01 ui Shop.Cart\ntf 02 cmd AddItem\ntf 03 evt ItemAdded\ntf 04 evt Other.Thing\n"), nil)
+	m := buildEventModel(parseEventModel("eventmodeling\ntf 01 ui Shop.Cart\ntf 02 cmd AddItem\ntf 03 evt ItemAdded\ntf 04 evt Other.Thing\n", nil), nil, nil)
 	var labels []string
 	for _, l := range m.lanes {
 		labels = append(labels, l.label)

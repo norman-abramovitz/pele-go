@@ -139,7 +139,7 @@ func NewLexer(types []*TokenType) *Lexer {
 func (l *Lexer) Types() []*TokenType { return l.types }
 
 // Tokenize lexes src, throwing upstream's lexical error at the first text no type matches.
-func (l *Lexer) Tokenize(src Src, diagram string) Tokens {
+func (l *Lexer) Tokenize(src Src, diagram string, o *perr.Origin) Tokens {
 	var toks Tokens
 	toks.Src = src
 	dead := make([]bool, len(l.types))
@@ -200,7 +200,7 @@ scan:
 			p = end
 			continue scan
 		}
-		perr.Throw(perr.SyntaxError(diagram, src, p, "", true))
+		perr.Throw(perr.SyntaxError(o, diagram, src, p, "", true))
 	}
 	toks.Kinds = append(toks.Kinds, -1)
 	toks.Starts = append(toks.Starts, n)

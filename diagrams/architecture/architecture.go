@@ -10,12 +10,12 @@ import (
 // Diagram is the architecture diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "architecture",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newArchitectureDb()
 		if title != nil {
 			db.title = *title
 		}
-		populate(parseArchitecture(source), db)
+		populate(parseArchitecture(source, limits.Origin), db)
 		return db
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {

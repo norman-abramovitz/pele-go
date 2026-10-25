@@ -28,8 +28,8 @@ import (
 // commit its tag points to. This module's own version is separate: it moves with changes
 // here, and a new upstream release only changes these.
 const (
-	UpstreamVersion = "1.9.1"
-	UpstreamCommit  = "3052498a453ebb8c8e4cb79e694232ba3c7d9021"
+	UpstreamVersion = "1.10.0"
+	UpstreamCommit  = "4eff76f98c73b6817800a05773517f35832e4e92"
 )
 
 // Options are the render options, upstream's RenderOptions. The zero value renders as

@@ -4,6 +4,7 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 )
 
 // Token kinds, in the order of pieTokens.
@@ -101,8 +102,8 @@ type ast struct {
 	sections                  []section
 }
 
-func parsePie(src string) ast {
-	r := common.NewReader(pieLexer.Tokenize(jsstr.UTF16(src), "pie"), pieLexer.Types(), "pie")
+func parsePie(src string, o *perr.Origin) ast {
+	r := common.NewReader(pieLexer.Tokenize(jsstr.UTF16(src), "pie", o), pieLexer.Types(), "pie", o)
 	var a ast
 
 	endOfLine := func() {

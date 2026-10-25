@@ -11,10 +11,10 @@ import (
 var Diagram = &core.Diagram{
 	Type: "block",
 	Math: true,
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newBlockDb()
 		db.title = title
-		parseBlock(source, db)
+		parseBlock(source, db, limits.Origin)
 		return db
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {

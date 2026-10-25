@@ -83,27 +83,27 @@ type parsed struct {
 	rules                     []rule
 }
 
-func grammar(source, notation string) parsed {
+func grammar(source, notation string, o *perr.Origin) parsed {
 	switch notation {
 	case "ebnf":
-		ast, rules := parseEbnf(source)
+		ast, rules := parseEbnf(source, o)
 		return toRules(ast, rules, ebnfNode)
 	case "abnf":
-		ast, rules := parseAbnf(source)
+		ast, rules := parseAbnf(source, o)
 		return toRules(ast, rules, abnfNode)
 	case "peg":
-		ast, rules := parsePeg(source)
+		ast, rules := parsePeg(source, o)
 		return toRules(ast, rules, pegNode)
 	default:
-		ast, rules := parseIr(source)
+		ast, rules := parseIr(source, o)
 		return toRules(ast, rules, irNode)
 	}
 }
 
 // populate parses the text in one notation and loads the result into the model, as
 // Mermaid's four parsers do.
-func populate(db *railroadDb, source, notation string) {
-	ast := grammar(source, notation)
+func populate(db *railroadDb, source, notation string, o *perr.Origin) {
+	ast := grammar(source, notation, o)
 	db.notation = notation
 	if ast.accDescr != "" {
 		db.setAccDescription(ast.accDescr)
@@ -119,7 +119,7 @@ func populate(db *railroadDb, source, notation string) {
 	}
 }
 
-func parseRailroad(source string, title *string) *railroadDb {
+func parseRailroad(source string, title *string, o *perr.Origin) *railroadDb {
 	notation := notationOf(source)
 	if notation == "" {
 		perr.Throw(&perr.Error{Code: perr.Syntax, Message: "No railroad diagram keyword found.", Type: "railroad"})
@@ -128,6 +128,6 @@ func parseRailroad(source string, title *string) *railroadDb {
 	if title != nil && *title != "" {
 		db.title = *title
 	}
-	populate(db, source, notation)
+	populate(db, source, notation, o)
 	return db
 }

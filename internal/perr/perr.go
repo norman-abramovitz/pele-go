@@ -3,6 +3,7 @@ package perr
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
@@ -100,8 +101,66 @@ type Location struct {
 	Snippet string
 }
 
-// Locate finds the line, column and snippet for a UTF-16 offset into src.
-func Locate(src []uint16, offset int) Location {
+// Edit is an input range [From, To) replaced by Length output characters, all in UTF-16
+// code units.
+type Edit struct{ From, To, Length int }
+
+func stepInput(edits []Edit, at int) int {
+	shift := 0
+	for _, e := range edits {
+		start := e.From - shift
+		if at < start {
+			break
+		}
+		if at < start+e.Length {
+			return e.From + min(at-start, e.To-e.From-1)
+		}
+		shift += e.To - e.From - e.Length
+	}
+	return at + shift
+}
+
+// InputOffset maps an offset in the output of steps, applied in order, back to their input.
+func InputOffset(steps [][]Edit, at int) int {
+	for s := len(steps) - 1; s >= 0; s-- {
+		at = stepInput(steps[s], at)
+	}
+	return at
+}
+
+// Origin is upstream's locatingIn() state: the text a diagram type parses, and how to find an
+// offset into it in the source as written. Upstream keeps it in a module variable for the
+// length of the parse; here the core hands it to Parse, and parsers pass it to Locate.
+type Origin struct {
+	parsed string
+	units  []uint16
+	find   func(at int) ([]uint16, int)
+}
+
+// NewOrigin returns the Origin for parsed, whose offsets find maps into the source.
+func NewOrigin(parsed string, find func(at int) ([]uint16, int)) *Origin {
+	return &Origin{parsed: parsed, find: find}
+}
+
+// Written is upstream's written(): it maps only when src is exactly the text being parsed.
+// A nil Origin maps nothing.
+func (o *Origin) Written(src []uint16, offset int) ([]uint16, int) {
+	if o == nil {
+		return src, offset
+	}
+	if o.units == nil {
+		o.units = jsstr.UTF16(o.parsed)
+	}
+	if slices.Equal(src, o.units) {
+		return o.find(offset)
+	}
+	return src, offset
+}
+
+// Locate finds the line, column and snippet for a UTF-16 offset into src, in the source as
+// written when src is the text o parses.
+func Locate(o *Origin, src []uint16, offset int) Location {
+	src, offset = o.Written(src, offset)
 	line := 1
 	lineStart := 0
 	for i := indexOf(src, '\n', 0); i != -1 && i < offset; i = indexOf(src, '\n', i+1) {
@@ -128,8 +187,8 @@ func indexOf(src []uint16, c uint16, from int) int {
 
 // SyntaxError builds upstream's syntaxError(): a lexical error, or a parse error that ends
 // with detail.
-func SyntaxError(diagramType string, src []uint16, offset int, detail string, lexical bool) *Error {
-	loc := Locate(src, offset)
+func SyntaxError(o *Origin, diagramType string, src []uint16, offset int, detail string, lexical bool) *Error {
+	loc := Locate(o, src, offset)
 	var message string
 	if lexical {
 		message = fmt.Sprintf("Lexical error on line %d. Unrecognized text.\n%s", loc.Line, loc.Snippet)

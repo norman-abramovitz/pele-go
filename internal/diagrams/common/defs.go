@@ -401,11 +401,12 @@ type Reader struct {
 	Tokens  Tokens
 	Types   []*TokenType
 	Diagram string
+	Origin  *perr.Origin
 }
 
-// NewReader returns a Reader at the first token.
-func NewReader(tokens Tokens, types []*TokenType, diagram string) *Reader {
-	return &Reader{Tokens: tokens, Types: types, Diagram: diagram}
+// NewReader returns a Reader at the first token, locating errors with o.
+func NewReader(tokens Tokens, types []*TokenType, diagram string, o *perr.Origin) *Reader {
+	return &Reader{Tokens: tokens, Types: types, Diagram: diagram, Origin: o}
 }
 
 // Kind returns the kind of the current token, -1 at the end.
@@ -446,5 +447,5 @@ func (r *Reader) Fail(expected string) {
 	if r.Kind() != -1 {
 		found = "`" + r.Text(r.I) + "`"
 	}
-	perr.Throw(perr.SyntaxError(r.Diagram, r.Tokens.Src, r.Tokens.Starts[r.I], "Expecting "+expected+" but found "+found+".", false))
+	perr.Throw(perr.SyntaxError(r.Origin, r.Diagram, r.Tokens.Src, r.Tokens.Starts[r.I], "Expecting "+expected+" but found "+found+".", false))
 }

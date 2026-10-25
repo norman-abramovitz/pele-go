@@ -4,6 +4,7 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 )
 
 // Token kinds, in the order of packetTokens.
@@ -72,8 +73,8 @@ type ast struct {
 	blocks                    []blockAst
 }
 
-func parsePacket(src string) ast {
-	r := common.NewReader(packetLexer.Tokenize(jsstr.UTF16(src), "packet"), packetLexer.Types(), "packet")
+func parsePacket(src string, o *perr.Origin) ast {
+	r := common.NewReader(packetLexer.Tokenize(jsstr.UTF16(src), "packet", o), packetLexer.Types(), "packet", o)
 	var a ast
 
 	endOfLine := func() {

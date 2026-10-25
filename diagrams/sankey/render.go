@@ -147,8 +147,8 @@ func draw(model *sankeyDb, conf *jsobj.Object, rc *core.Context, chartWidth, nat
 	nodeWidth := min(numberOption(conf, "nodeWidth", 10, 1, 200), chartWidth)
 	showValues, _ := conf.Get("showValues")
 	showsValues := showValues != false
-	prefix := textOption(conf, "prefix")
-	suffix := textOption(conf, "suffix")
+	prefix := text.DecodeEntities(textOption(conf, "prefix"))
+	suffix := text.DecodeEntities(textOption(conf, "suffix"))
 	labelStyle, _ := conf.Get("labelStyle")
 	outlined := labelStyle == "outlined"
 	align := alignment("justify")
@@ -388,7 +388,7 @@ func draw(model *sankeyDb, conf *jsobj.Object, rc *core.Context, chartWidth, nat
 			`L` + svg.Num(x1) + `,` + svg.Num(link.targetY+half) +
 			`C` + mid + `,` + svg.Num(link.targetY+half) + ` ` + mid + `,` + svg.Num(link.sourceY+half) + ` ` + svg.Num(x0) + `,` + svg.Num(link.sourceY+half) +
 			`Z" ` + paint + `>` +
-			`<title>` + from + ` → ` + to + `: ` + svg.EscText(prefix) + rounded(link.value) + svg.EscText(suffix) + `</title></path>`)
+			`<title>` + from + ` → ` + to + `: ` + svg.Esc(prefix) + rounded(link.value) + svg.Esc(suffix) + `</title></path>`)
 	}
 
 	title := text.Layout(model.title, false, measurer, size, common.TitleRoom(options), text.Bold, rc.Icons)

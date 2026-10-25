@@ -10,12 +10,12 @@ import (
 var Diagram = &core.Diagram{
 	Type: "state",
 	Math: true,
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newStateDb()
 		if title != nil && *title != "" {
 			db.title = *title
 		}
-		parseState(source, db)
+		parseState(source, db, limits.Origin)
 		return db
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {

@@ -210,12 +210,6 @@ lexing:
 			p = lineEnd(p + 2)
 			continue
 		}
-		// Mermaid's second comment rule takes any character before `%%` with it, a line
-		// break included.
-		if c != 125 && next == 37 && src.At(p+2) == 37 {
-			p = lineEnd(p + 3)
-			continue
-		}
 		if c == 10 || c == 13 {
 			e := p + 1
 			for d := src.At(e); d == 10 || d == 13; d = src.At(e) {

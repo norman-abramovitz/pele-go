@@ -5,7 +5,7 @@ The design is `plans/design-2026-10-20-pele-go-port.md`.
 
 ## The contract
 
-Output must be **byte-identical** to Pele 1.9.1 (tag `1.9.1`, commit 3052498; see
+Output must be **byte-identical** to Pele 1.10.0 (tag `1.10.0`, commit 4eff76f; see
 `pele.UpstreamVersion` and `pele.UpstreamCommit`) running under V8, for the same source,
 options, `now` and measurer: the SVG, width, height, links, and on failure the error code,
 message, type, line, column and snippet. "Looks the same" is a failure.
@@ -14,7 +14,7 @@ The scripts and parts of this guide need a checkout of upstream at that tag, wit
 `node_modules` installed. Put it anywhere outside this repo; below it is `$PELE_UPSTREAM`:
 
 ```sh
-git clone --branch 1.9.1 --depth 1 https://github.com/obsidianmd/pele.git "$PELE_UPSTREAM"
+git clone --branch 1.10.0 --depth 1 https://github.com/obsidianmd/pele.git "$PELE_UPSTREAM"
 (cd "$PELE_UPSTREAM" && npm ci)
 ```
 
@@ -40,6 +40,11 @@ short comment.
   rc)` returns `core.Rendered`. Read options from `rc.Options` (pointer fields: nil means
   unset, use upstream's `??` default) and `rc.Responsive`; measure with `rc.Measurer()`;
   icons via `rc.Icons`. `limits.MaxEdges` is a float64.
+- Errors are located in the source as written. Upstream's `locate()` maps an offset when its
+  text equals the text being parsed, through module state set for the parse; here that state
+  is `limits.Origin`, so pass it to every `perr.Locate`, `perr.SyntaxError`,
+  `common.NewReader`, `Lexer.Tokenize` and `common.ParseOutline` (`Origin.Written` for
+  upstream's `written()`). A nil Origin locates in the text given.
 
 ## JavaScript semantics you must reproduce
 

@@ -4,6 +4,7 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 	"github.com/Broderick-Westrope/pele-go/internal/util"
 )
 
@@ -186,8 +187,8 @@ type gitGraphAst struct {
 	statements                []statementAst
 }
 
-func parseGit(src string) gitGraphAst {
-	r := common.NewReader(gitLexer.Tokenize(jsstr.UTF16(src), "gitGraph"), gitLexer.Types(), "gitGraph")
+func parseGit(src string, o *perr.Origin) gitGraphAst {
+	r := common.NewReader(gitLexer.Tokenize(jsstr.UTF16(src), "gitGraph", o), gitLexer.Types(), "gitGraph", o)
 	var a gitGraphAst
 
 	endOfLine := func() {

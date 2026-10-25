@@ -89,16 +89,27 @@ func tokenize(src common.Src) common.TextTokens {
 				continue
 			}
 		}
-		// `\s` after a keyword also takes a line break, so `title` alone on a line takes the next line as its text.
-		if common.KeywordAt(src, p, "title") && util.IsSpace(src.At(p+5)) && p+6 < n && src[p+6] != 10 {
-			emit(tTitle, common.LineEnd(src, p+6))
-			continue
+		if common.KeywordAt(src, p, "title") {
+			// Unlike Mermaid, ignore bare titles.
+			e = p + 5
+			for src.At(e) != 10 && util.IsSpace(src.At(e)) {
+				e++
+			}
+			if e == n || src.At(e) == 10 {
+				p = e
+				continue
+			}
+			if sep := src.At(p + 5); sep != 13 && util.IsSpace(sep) {
+				emit(tTitle, common.LineEnd(src, p+6))
+				continue
+			}
 		}
 		e = common.Accessibility(src, p, &out, tAccTitle)
 		if e != p {
 			p = e
 			continue
 		}
+		// Like Mermaid, a bare section uses the next line as its name.
 		if common.KeywordAt(src, p, "section") && util.IsSpace(src.At(p+7)) {
 			e = p + 8
 			for e < n && src[e] != 58 && src[e] != 10 {

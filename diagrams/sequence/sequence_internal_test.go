@@ -19,7 +19,7 @@ func parse(t *testing.T, src string) (db *seqDb, err *perr.Error) {
 		}
 	}()
 	db = newSeqDb(seqDbOptions{})
-	parseSequence(jsstr.UTF16(src+"\n"), db)
+	parseSequence(jsstr.UTF16(src+"\n"), db, nil)
 	return db, nil
 }
 

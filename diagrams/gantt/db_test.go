@@ -17,7 +17,7 @@ import (
 func scheduleOf(t *testing.T, loc *time.Location, lines ...string) []*task {
 	t.Helper()
 	db := newGanttDb()
-	parseGantt("gantt\n"+strings.Join(lines, "\n")+"\n", db)
+	parseGantt("gantt\n"+strings.Join(lines, "\n")+"\n", db, nil)
 	return db.getTasks(at(loc, 2031, 4, 6, 9, 30).Time(), loc).tasks
 }
 
@@ -104,7 +104,7 @@ func TestExcludesMergeAcrossStatements(t *testing.T) {
 	}
 	for name, tc := range tests {
 		db := newGanttDb()
-		parseGantt("gantt\n"+strings.Join(tc.lines, "\n")+"\n", db)
+		parseGantt("gantt\n"+strings.Join(tc.lines, "\n")+"\n", db, nil)
 		got := db.excludes
 		if name == "includes" {
 			got = db.includes

@@ -124,6 +124,24 @@ func (l *vennLexer) color(at, parts int) int {
 	return i
 }
 
+func (l *vennLexer) afterLineFeed(at int) bool {
+	k := at - 1
+	for l.src.At(k) == 32 || l.src.At(k) == 9 {
+		k--
+	}
+	return l.src.At(k) == 10
+}
+
+// blank is s.trim() === ”.
+func blank(s common.Src) bool {
+	for _, c := range s {
+		if !util.IsSpace(int(c)) {
+			return false
+		}
+	}
+	return true
+}
+
 func (l *vennLexer) next() int {
 	src := l.src
 	n := len(src)
@@ -139,11 +157,17 @@ func (l *vennLexer) next() int {
 			return tEOF
 		}
 		c := int(src[i])
-		// A comment runs to the end of the line. It also takes the character before it along,
-		// whatever that is: a line break, or the last letter of a word.
-		if (c == 37 && src.At(i+1) == 37 && src.At(i+2) != 123) ||
-			(c != 125 && src.At(i+1) == 37 && src.At(i+2) == 37) {
+		if c == 37 && src.At(i+1) == 37 && src.At(i+2) != 123 {
 			l.at = common.LineEnd(src, i+2)
+			continue
+		}
+		if l.lineStart && l.word(i, "title") && l.afterLineFeed(i) && blank(src[i+5:common.LineEnd(src, i+5)]) {
+			// Skip a bare title like a comment, so it doesn't end indented text.
+			j := common.LineEnd(src, i+5)
+			for src.At(j) == 10 || src.At(j) == 13 {
+				j++
+			}
+			l.at = j
 			continue
 		}
 		if l.lineStart {
@@ -189,7 +213,7 @@ func (l *vennLexer) next() int {
 		}
 
 		if (c|32 >= 97 && c|32 <= 122) || c == 95 {
-			if l.word(i, "title") && util.IsSpace(src.At(i+5)) {
+			if sep := src.At(i + 5); l.word(i, "title") && util.IsSpace(sep) && sep != 10 && sep != 13 {
 				end := i + 6
 				for end < n {
 					ch := src[end]

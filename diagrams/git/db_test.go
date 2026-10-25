@@ -9,7 +9,7 @@ import (
 
 // Mermaid's commit ids end in random digits; upstream derives them from the sequence number.
 func TestCommitIDsAreDeterministic(t *testing.T) {
-	m := buildGit(parseGit("gitGraph\ncommit\ncommit\ncommit id: \"x\"\ncommit\n"), jsobj.New(), nil)
+	m := buildGit(parseGit("gitGraph\ncommit\ncommit\ncommit id: \"x\"\ncommit\n", nil), jsobj.New(), nil)
 	var got []string
 	for id := range m.commits.Keys() {
 		got = append(got, id)
@@ -36,7 +36,7 @@ func TestLaneOrder(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			m := buildGit(parseGit(tc.source), jsobj.New(), nil)
+			m := buildGit(parseGit(tc.source, nil), jsobj.New(), nil)
 			if !slices.Equal(m.lanes, tc.want) {
 				t.Errorf("lanes %q, want %q", m.lanes, tc.want)
 			}

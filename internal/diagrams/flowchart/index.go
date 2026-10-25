@@ -26,6 +26,6 @@ func Parse(source string, config *jsobj.Object, title *string, _ int, limits cor
 	if title != nil && *title != "" {
 		db.Title = *title
 	}
-	parseFlowchart(source, db)
+	parseFlowchart(source, db, limits.Origin)
 	return db
 }

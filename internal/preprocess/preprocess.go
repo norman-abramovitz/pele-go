@@ -30,22 +30,57 @@ var unsafeKeys = map[string]bool{"__proto__": true, "constructor": true, "protot
 
 func isLineTerminator(r rune) bool { return jsstr.IsLineEnd(r) }
 
-// CleanupComments removes %% comment lines, as Mermaid's /^\s*%%(?!{)[^\n]+\n?/gm does,
-// then leading whitespace.
-func CleanupComments(text string) string {
-	if strings.Contains(text, "%%") {
-		text = removeComments(text)
+// Steps records the edits preprocessing makes, one []perr.Edit per step, so that an offset
+// into its output can be found in its input. A nil *Steps records nothing.
+type Steps [][]perr.Edit
+
+// push records a step whose edits are given as byte offsets into text, with lengths in
+// UTF-16 code units.
+func (s *Steps) push(text string, edits [][3]int) {
+	if s == nil {
+		return
 	}
-	return jsstr.TrimStart(text)
+	out := make([]perr.Edit, len(edits))
+	units, at := 0, 0
+	conv := func(b int) int {
+		units += jsstr.Len(text[at:b])
+		at = b
+		return units
+	}
+	for i, e := range edits {
+		out[i] = perr.Edit{From: conv(e[0]), To: conv(e[1]), Length: e[2]}
+	}
+	*s = append(*s, out)
 }
 
-func removeComments(text string) string {
+// NormalizeLineBreaks turns \r\n and \r into \n.
+func NormalizeLineBreaks(text string) string {
+	if strings.Contains(text, "\r") {
+		return reCRLF.ReplaceAllString(text, "\n")
+	}
+	return text
+}
+
+// CleanupComments removes %% comment lines, as Mermaid's /^\s*%%(?!{)[^\n]+\n?/gm does,
+// then leading whitespace.
+func CleanupComments(text string, steps *Steps) string {
+	if strings.Contains(text, "%%") {
+		text = removeComments(text, steps)
+	}
+	trimmed := jsstr.TrimStart(text)
+	steps.push(text, [][3]int{{0, len(text) - len(trimmed), 0}})
+	return trimmed
+}
+
+func removeComments(text string, steps *Steps) string {
 	var out strings.Builder
+	var edits [][3]int
 	last := 0
 	for p := 0; p < len(text); {
 		if p == 0 || prevIsLineTerminator(text, p) {
 			if end := commentAt(text, p); end > p {
 				out.WriteString(text[last:p])
+				edits = append(edits, [3]int{p, end, 0})
 				last = end
 				p = end
 				continue
@@ -54,6 +89,7 @@ func removeComments(text string) string {
 		_, n := jsstr.Decode(text, p)
 		p += n
 	}
+	steps.push(text, edits)
 	if last == 0 {
 		return text
 	}
@@ -241,12 +277,10 @@ var (
 	reAttr    = regexp.MustCompile(`="([^"]*)"`)
 )
 
-// Preprocess prepares source for detection and parsing.
-func Preprocess(source string) Preprocessed {
-	text := source
-	if strings.Contains(text, "\r") {
-		text = reCRLF.ReplaceAllString(text, "\n")
-	}
+// Preprocess prepares source for detection and parsing. steps maps the source, with its line
+// breaks normalized, to WithComments.
+func Preprocess(source string, steps *Steps) Preprocessed {
+	text := NormalizeLineBreaks(source)
 	// A tag needs a closing bracket, so nothing after the last one can match.
 	lastClose := -1
 	if strings.Contains(text, "<") {
@@ -304,11 +338,12 @@ func Preprocess(source string) Preprocessed {
 		for i := strings.IndexByte(text, '\n'); i != -1 && i < front.length; i = indexFrom(text, "\n", i+1) {
 			lineOffset++
 		}
+		steps.push(text, [][3]int{{0, front.length, 0}})
 		text = text[front.length:]
 	}
 
-	text = directives(text, config)
-	return Preprocessed{Text: CleanupComments(text), Title: title, Config: config, WithComments: text, LineOffset: lineOffset}
+	text = directives(text, config, steps)
+	return Preprocessed{Text: CleanupComments(text, nil), Title: title, Config: config, WithComments: text, LineOffset: lineOffset}
 }
 
 type directive struct {
@@ -397,7 +432,7 @@ func eachDirective(s string, fn func(start int, d directive)) {
 	}
 }
 
-func directives(text string, config *jsobj.Object) string {
+func directives(text string, config *jsobj.Object, steps *Steps) string {
 	if !strings.Contains(text, "%%{") {
 		return text
 	}
@@ -416,10 +451,13 @@ func directives(text string, config *jsobj.Object) string {
 		}
 	})
 	var out strings.Builder
+	var edits [][3]int
 	last := 0
 	eachDirective(text, func(start int, d directive) {
 		out.WriteString(text[last:start])
+		edits = append(edits, [3]int{start, d.end, 0})
 		last = d.end
 	})
+	steps.push(text, edits)
 	return out.String() + text[last:]
 }

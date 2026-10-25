@@ -323,7 +323,7 @@ func (db *FlowDb) addSingleLink(start, end string, info *LinkInfo, id string) {
 	}
 
 	if limit := db.options.MaxEdges; float64(len(db.Edges)) >= limit {
-		flowError("Edge limit exceeded. "+strconv.Itoa(len(db.Edges))+" edges found, but the limit is "+jsnum.Format(limit)+".", perr.Limit)
+		flowError("Edge limit exceeded. The limit is "+jsnum.Format(limit)+".", perr.Limit)
 	}
 	db.Edges = append(db.Edges, edge)
 	db.pairCount[pair]++

@@ -3,6 +3,7 @@ package cynefin
 import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 )
 
 // Token kinds, in the order of cynefinTokens.
@@ -65,8 +66,8 @@ type cynefinAst struct {
 	transitions               []transitionAst
 }
 
-func parseCynefin(src string) cynefinAst {
-	r := common.NewReader(cynefinLexer.Tokenize(common.Src(jsstr.UTF16(src)), "cynefin"), cynefinTokens, "cynefin")
+func parseCynefin(src string, o *perr.Origin) cynefinAst {
+	r := common.NewReader(cynefinLexer.Tokenize(common.Src(jsstr.UTF16(src)), "cynefin", o), cynefinTokens, "cynefin", o)
 	var ast cynefinAst
 
 	skipLines := func() {

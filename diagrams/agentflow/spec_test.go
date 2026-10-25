@@ -221,7 +221,7 @@ func TestShapeErrorsAreLocatedWithoutAPositionInTheMessage(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			db := newAgentflowDb(agentflowDbOptions{maxEdges: 500, lineOffset: tc.offset})
-			err := catch(func() { parseAgentflow("agentflow-beta TB\n  a[\"A\"]@{ shape: Rounded }", db, false) })
+			err := catch(func() { parseAgentflow("agentflow-beta TB\n  a[\"A\"]@{ shape: Rounded }", db, false, nil) })
 			if err == nil || !strings.Contains(err.Message, "No such shape") || position.MatchString(err.Message) {
 				t.Fatalf("error %v", err)
 			}

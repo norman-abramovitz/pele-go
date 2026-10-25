@@ -11,7 +11,7 @@ import (
 // Diagram is the gantt diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "gantt",
-	Parse: func(source string, config *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, config *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newGanttDb()
 		if title != nil && *title != "" {
 			db.title = *title
@@ -25,7 +25,7 @@ var Diagram = &core.Diagram{
 				}
 			}
 		}
-		parseGantt(source, db)
+		parseGantt(source, db, limits.Origin)
 		return db
 	},
 	Render: func(model any, config *jsobj.Object, rc *core.Context) core.Rendered {

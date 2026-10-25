@@ -24,6 +24,10 @@ type agentflowDbOptions struct {
 	// lineOffset is the lines of front matter before the text the parser sees, added to
 	// every reported line.
 	lineOffset int
+	// source is the text the parser sees, where errors are located with origin; nil when
+	// unset.
+	source *string
+	origin *perr.Origin
 }
 
 // presentationKeys are the metadata keys left out of the semantic model.
@@ -370,13 +374,35 @@ func newAgentflowDb(options agentflowDbOptions) *agentflowDb {
 	}
 }
 
+func (db *agentflowDb) errorAt(l *loc) (line, column int) {
+	if l == nil {
+		return 0, 0
+	}
+	if db.options.source == nil {
+		return l.firstLine + db.lineOffset, l.firstColumn + 1
+	}
+	source := jsstr.UTF16(*db.options.source)
+	start := 0
+	for n := 1; n < l.firstLine; n++ {
+		start = indexOf(source, '\n', start) + 1
+	}
+	at := perr.Locate(db.options.origin, source, start+l.firstColumn)
+	return at.Line, at.Column
+}
+
+func indexOf(text []uint16, c uint16, from int) int {
+	for i := from; i < len(text); i++ {
+		if text[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
 func (db *agentflowDb) located(message string, code perr.Code, l *loc) {
 	e := perr.New(message, code)
 	e.Type = "agentflow"
-	if l != nil {
-		e.Line = l.firstLine + db.lineOffset
-		e.Column = l.firstColumn + 1
-	}
+	e.Line, e.Column = db.errorAt(l)
 	perr.Throw(e)
 }
 
@@ -403,7 +429,8 @@ func (db *agentflowDb) metadata(id, source string, l *loc) any {
 		if !retried {
 			at := ""
 			if l != nil {
-				at = " (" + strconv.Itoa(l.firstLine+db.lineOffset) + ":" + strconv.Itoa(l.firstColumn+1) + ")"
+				line, column := db.errorAt(l)
+				at = " (" + strconv.Itoa(line) + ":" + strconv.Itoa(column) + ")"
 			}
 			db.located(`Metadata of "`+id+`" is not valid YAML. `+err.Error()+at, perr.Syntax, l)
 		}
@@ -552,7 +579,7 @@ func (db *agentflowDb) addSingleLink(start, end string, info *linkInfo, id strin
 	}
 
 	if limit := db.options.maxEdges; float64(len(db.edges)) >= limit {
-		e := perr.New("Edge limit exceeded. "+strconv.Itoa(len(db.edges))+" edges found, but the limit is "+jsnum.Format(limit)+".", perr.Limit)
+		e := perr.New("Edge limit exceeded. The limit is "+jsnum.Format(limit)+".", perr.Limit)
 		e.Type = "agentflow"
 		perr.Throw(e)
 	}

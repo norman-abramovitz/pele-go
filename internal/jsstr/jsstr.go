@@ -91,7 +91,8 @@ func writeRune(b *strings.Builder, r rune) {
 }
 
 // Normalize returns s with every invalid byte turned into U+FFFD, as converting s to a JS
-// string does. Lone surrogates already in WTF-8 are kept.
+// string does. Lone surrogates already in WTF-8 are kept, and a high and a low one encoded
+// next to each other become the character JS reads them as.
 func Normalize(s string) string {
 	for i := 0; i < len(s); {
 		r, n := Decode(s, i)
@@ -100,7 +101,7 @@ func Normalize(s string) string {
 		}
 		i += n
 	}
-	return s
+	return Canonical(s)
 }
 
 // Len returns s.length: the number of UTF-16 code units in s.

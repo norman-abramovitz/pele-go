@@ -190,17 +190,52 @@ func remapErrorLines(message string, lineMap map[int]int) string {
 	return b.String()
 }
 
-func fail(line int, message string) {
+// lineStart is the offset of a line, from 1, in text. Like upstream's indexOf loop, it starts
+// over from 0 past the last line.
+func lineStart(text []uint16, line int) int {
+	at := 0
+	for n := 1; n < line; n++ {
+		at = indexOf(text, '\n', at) + 1
+	}
+	return at
+}
+
+func indexOf(text []uint16, c uint16, from int) int {
+	for i := from; i < len(text); i++ {
+		if text[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+func fail(o *perr.Origin, input []uint16, index int, message string) {
+	line := perr.Locate(o, input, lineStart(input, index+1)).Line
 	perr.Throw(&perr.Error{Code: perr.Syntax, Message: "Line " + strconv.Itoa(line) + ": " + message, Type: "treeView", Line: line})
 }
 
+// beforeTabs undoes four-space tab expansion.
+func beforeTabs(line []uint16, at int) int {
+	i := 0
+	for n := 0; i < len(line) && n < at; i++ {
+		if line[i] == '\t' {
+			n += 4
+		} else {
+			n++
+		}
+	}
+	return i
+}
+
 // preprocessBoxDrawing returns the text the grammar reads and, when it changed the text, a map
-// from its line numbers to the original's, both from 1.
-func preprocessBoxDrawing(input string) (string, map[int]int) {
+// from its line numbers to the original's, both from 1, and per output line a map from its
+// indices to the original's.
+func preprocessBoxDrawing(input string, o *perr.Origin) (string, map[int]int, map[int]func(int) int) {
 	lineMap := map[int]int{}
+	columns := map[int]func(int) int{}
 	units := jsstr.UTF16(input)
 	if !hasBoxChar(units) {
-		return input, lineMap
+		return input, lineMap, columns
 	}
 	var lines [][]uint16
 	from := 0
@@ -220,7 +255,7 @@ func preprocessBoxDrawing(input string) (string, map[int]int) {
 		}
 	}
 	if keywordIdx == -1 {
-		return input, lineMap
+		return input, lineMap, columns
 	}
 
 	passes := func(line []uint16) bool {
@@ -242,23 +277,26 @@ func preprocessBoxDrawing(input string) (string, map[int]int) {
 		}
 	}
 	if !contentHasBox {
-		return input, lineMap
+		return input, lineMap, columns
 	}
 
 	segmentWidth := inferSegmentWidth(contentLines)
 	var out []string
-	keep := func(text string, index int) {
+	keep := func(text string, index int, column func(int) int) {
 		out = append(out, text)
 		lineMap[len(out)] = index + 1
+		if column != nil {
+			columns[len(out)] = column
+		}
 	}
 
 	for i := 0; i <= keywordIdx; i++ {
-		keep(jsstr.FromUTF16(lines[i]), i)
+		keep(jsstr.FromUTF16(lines[i]), i, nil)
 	}
 	for i := keywordIdx + 1; i < len(lines); i++ {
 		line := lines[i]
 		if passes(line) {
-			keep(jsstr.FromUTF16(line), i)
+			keep(jsstr.FromUTF16(line), i, nil)
 			continue
 		}
 		if decorationOnly(line) {
@@ -277,21 +315,22 @@ func preprocessBoxDrawing(input string) (string, map[int]int) {
 			}
 			content := jsstr.TrimEnd(jsstr.FromUTF16(normalized[pos:]))
 			if content == "" {
-				fail(i+1, "Empty node — expected a filename or directory name after the box-drawing prefix")
+				fail(o, units, i, "Empty node — expected a filename or directory name after the box-drawing prefix")
 			}
-			keep(strings.Repeat(indentUnit, depth)+content, i)
+			indent := strings.Repeat(indentUnit, depth)
+			keep(indent+content, i, func(at int) int { return beforeTabs(line, pos+max(at-len(indent), 0)) })
 		} else if boxOnly(normalized) {
 			continue
 		} else if hasBoxChar(normalized) {
 			// A name that happens to contain a box character, such as "Section ─ A.txt", is a root item.
-			keep(jsstr.FromUTF16(line), i)
+			keep(jsstr.FromUTF16(line), i, nil)
 		} else if len(normalized) > 0 && isSpaceUnit(normalized[0]) {
-			fail(i+1, "Unexpected indentation without box-drawing characters. In box-drawing format, use ├── or └── prefixes for indented nodes.")
+			fail(o, units, i, "Unexpected indentation without box-drawing characters. In box-drawing format, use ├── or └── prefixes for indented nodes.")
 		} else {
-			keep(jsstr.FromUTF16(line), i)
+			keep(jsstr.FromUTF16(line), i, nil)
 		}
 	}
-	return strings.Join(out, "\n"), lineMap
+	return strings.Join(out, "\n"), lineMap, columns
 }
 
 func asciiEqualFold(s, lower string) bool {

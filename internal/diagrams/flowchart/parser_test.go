@@ -13,7 +13,7 @@ import (
 func parse(t *testing.T, src string) *FlowDb {
 	t.Helper()
 	db := newFlowDb(flowDbOptions{MaxEdges: 500})
-	parseFlowchart(src, db)
+	parseFlowchart(src, db, nil)
 	return db
 }
 
@@ -233,9 +233,9 @@ func TestEdgeLimit(t *testing.T) {
 	db := newFlowDb(flowDbOptions{MaxEdges: 2})
 	defer func() {
 		e, ok := recover().(*perr.Error)
-		if !ok || e.Message != "Edge limit exceeded. 2 edges found, but the limit is 2." || e.Code != perr.Limit {
+		if !ok || e.Message != "Edge limit exceeded. The limit is 2." || e.Code != perr.Limit {
 			t.Errorf("error = %v", e)
 		}
 	}()
-	parseFlowchart("graph TD\nA & B --> C & D\n", db)
+	parseFlowchart("graph TD\nA & B --> C & D\n", db, nil)
 }

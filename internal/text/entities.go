@@ -141,6 +141,34 @@ func entityAt(s string, i int) (int, string, bool) {
 	return 0, "", false
 }
 
+// WrittenCodes turns placeholders back into the #name; codes they hide, as upstream's
+// text.replace(/ﬂ°°?(\w+)¶ß/g, '#$1;') does.
+func WrittenCodes(text string) string {
+	if !strings.Contains(text, placeholderClose) {
+		return text
+	}
+	var out strings.Builder
+	last := 0
+	for from := strings.Index(text, placeholderOpen); from != -1; {
+		i := from + len(placeholderOpen)
+		if strings.HasPrefix(text[i:], "°") {
+			i += len("°")
+		}
+		w := span(text, i, isWordByte)
+		if w > i && strings.HasPrefix(text[w:], placeholderClose) {
+			out.WriteString(text[last:from] + "#" + text[i:w] + ";")
+			last = w + len(placeholderClose)
+			from = indexFrom(text, placeholderOpen, last)
+			continue
+		}
+		from = indexFrom(text, placeholderOpen, from+1)
+	}
+	if last == 0 {
+		return text
+	}
+	return out.String() + text[last:]
+}
+
 // DecodeEntities turns Mermaid's #35; and #quot; codes, as hidden by EncodeEntities, and
 // HTML entities into characters.
 func DecodeEntities(text string) string {

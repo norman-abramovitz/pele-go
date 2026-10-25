@@ -18,7 +18,7 @@ func build(src string) (m model, err *perr.Error) {
 			err = e
 		}
 	}()
-	return buildPacket(parsePacket(src), jsobj.New(), nil), nil
+	return buildPacket(parsePacket(src, nil), jsobj.New(), nil), nil
 }
 
 // Ported from tests/compat/packet/packet.spec.ts.

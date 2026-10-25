@@ -9,6 +9,7 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/jsobj"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
 	"github.com/Broderick-Westrope/pele-go/internal/perr"
+	entities "github.com/Broderick-Westrope/pele-go/internal/text"
 	"github.com/Broderick-Westrope/pele-go/internal/util"
 )
 
@@ -407,8 +408,16 @@ func jsonError(message string, line, column float64) *perr.Error {
 func parseOrderedJSON(text common.Src, origin func() (int, int)) orderedJSON {
 	str := jsstr.FromUTF16(text)
 	if message := jsjson.V8Message(str); message != "" {
+		// Reparse restored entity codes so error messages and positions match the source.
+		shown := text
+		if written := entities.WrittenCodes(str); written != str {
+			if again := jsjson.V8Message(written); again != "" {
+				message = again
+			}
+			shown = jsstr.UTF16(written)
+		}
 		ol, oc := origin()
-		line, column, ok := locationFromMessage(message, text, float64(ol), float64(oc))
+		line, column, ok := locationFromMessage(message, shown, float64(ol), float64(oc))
 		if !ok {
 			offset := 0
 			func() {
@@ -421,9 +430,9 @@ func parseOrderedJSON(text common.Src, origin func() (int, int)) orderedJSON {
 						offset = w.offset
 					}
 				}()
-				propertyOrder(text)
+				propertyOrder(shown)
 			}()
-			line, column = locationAt(text, float64(offset), float64(ol), float64(oc))
+			line, column = locationAt(shown, float64(offset), float64(ol), float64(oc))
 		}
 		perr.Throw(jsonError("Invalid JSON: "+message, line, column))
 	}

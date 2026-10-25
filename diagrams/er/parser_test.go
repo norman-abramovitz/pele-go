@@ -11,7 +11,7 @@ import (
 func parse(t *testing.T, source string) *erDb {
 	t.Helper()
 	db := newErDb()
-	parseEr(source, db)
+	parseEr(source, db, nil)
 	return db
 }
 
@@ -25,7 +25,7 @@ func parseErr(t *testing.T, source string) (err *perr.Error) {
 		}
 		err = e
 	}()
-	parseEr(source, newErDb())
+	parseEr(source, newErDb(), nil)
 	return nil
 }
 

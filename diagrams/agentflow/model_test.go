@@ -25,8 +25,8 @@ func parseSource(src string) (*agentflowDb, *perr.Error) {
 	if _, err := core.Parse(context.Background(), src, core.Options{Limit: &inf}); err != nil {
 		return nil, err.(*perr.Error)
 	}
-	pre := preprocess.Preprocess(jsstr.Normalize(src))
-	model := Diagram.Parse(preprocess.EncodeEntities(pre.WithComments)+"\n", pre.Config, pre.Title, pre.LineOffset,
+	pre := preprocess.Preprocess(jsstr.Normalize(src), nil)
+	model := Diagram.Parse(preprocess.EncodeEntities(pre.WithComments, nil)+"\n", pre.Config, pre.Title, pre.LineOffset,
 		core.Limits{MaxEdges: core.DefaultMaxEdges})
 	return model.(*agentflowDb), nil
 }
@@ -35,7 +35,7 @@ func parseSource(src string) (*agentflowDb, *perr.Error) {
 // skips the trimming after a closing brace. It returns the error the parser throws, if any.
 func parseRaw(src string, raw bool) (db *agentflowDb, err *perr.Error) {
 	db = newAgentflowDb(agentflowDbOptions{maxEdges: 500})
-	if err := catch(func() { parseAgentflow(src, db, raw) }); err != nil {
+	if err := catch(func() { parseAgentflow(src, db, raw, nil) }); err != nil {
 		return nil, err
 	}
 	return db, nil

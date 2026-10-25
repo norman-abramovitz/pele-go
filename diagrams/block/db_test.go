@@ -49,7 +49,7 @@ func TestColorIndex(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			db := newBlockDb()
-			parseBlock(tc.source, db)
+			parseBlock(tc.source, db, nil)
 			for id, want := range tc.want {
 				b, ok := db.byId.Get(id)
 				if !ok {

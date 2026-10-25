@@ -131,12 +131,6 @@ func tokenize(src common.Src) tokens {
 			p = lineEnd(p + 2)
 			continue
 		}
-		// Mermaid's second comment rule takes any character before `%%` with it, a line
-		// break included.
-		if c != 125 && next == 37 && src.At(p+2) == 37 {
-			p = lineEnd(p + 3)
-			continue
-		}
 		if c == 10 || c == 13 {
 			// Only a line break that directly follows an axis or a series ends it; one after
 			// spaces is skipped with them, and the state carries on to the next line.

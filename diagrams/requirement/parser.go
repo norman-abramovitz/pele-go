@@ -38,7 +38,7 @@ func isStylePart(t int) bool {
 }
 
 // parseRequirement panics with a *perr.Error on a syntax error.
-func parseRequirement(source string, db *requirementDb) {
+func parseRequirement(source string, db *requirementDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	tk := tokenize(src)
 	types, texts, starts := tk.types, tk.texts, tk.starts
@@ -51,7 +51,7 @@ func parseRequirement(source string, db *requirementDb) {
 	fail := func(from, to int, others ...int) {
 		t := types[i]
 		if t == tError {
-			perr.Throw(perr.SyntaxError("requirement", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "requirement", src, starts[i], "", true))
 		}
 		names := make([]string, 0, to-from+1+len(others))
 		for k := from; k <= to; k++ {
@@ -60,7 +60,7 @@ func parseRequirement(source string, db *requirementDb) {
 		for _, k := range others {
 			names = append(names, "'"+tokenNames[k]+"'")
 		}
-		perr.Throw(perr.SyntaxError("requirement", src, starts[i],
+		perr.Throw(perr.SyntaxError(o, "requirement", src, starts[i],
 			"Expecting "+strings.Join(names, ", ")+", got '"+tokenNames[t]+"'", false))
 	}
 

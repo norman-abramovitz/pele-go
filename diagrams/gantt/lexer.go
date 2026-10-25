@@ -50,6 +50,40 @@ func keywordLine(src common.Src, p int, word string, stops string) int {
 	return e
 }
 
+// isBlank is [^\S\r\n]: whitespace but a line break.
+func isBlank(c int) bool { return c != '\r' && c != '\n' && util.IsSpace(c) }
+
+// bareTitle matches /title[^\S\r\n]*(?=[\r\n]|$)/iy.
+func bareTitle(src common.Src, p int) int {
+	if !common.WordAt(src, p, "title") {
+		return -1
+	}
+	e := p + len("title")
+	for isBlank(src.At(e)) {
+		e++
+	}
+	if e < len(src) && src[e] != '\r' && src[e] != '\n' {
+		return -1
+	}
+	return e
+}
+
+// titleLine matches /title[^\S\r\n][^\n]+/iy.
+func titleLine(src common.Src, p int) int {
+	if !common.WordAt(src, p, "title") || !isBlank(src.At(p+len("title"))) {
+		return -1
+	}
+	start := p + len("title") + 1
+	e := start
+	for e < len(src) && src[e] != '\n' {
+		e++
+	}
+	if e == start {
+		return -1
+	}
+	return e
+}
+
 func containsUnit(set string, c uint16) bool {
 	for i := 0; i < len(set); i++ {
 		if uint16(set[i]) == c {
@@ -130,7 +164,7 @@ var keywordRules = map[int][]keywordRule{
 		{word("topaxis"), tTopAxis},
 		{line("tickinterval", "#\n;"), tTickInterval},
 		{line("todaymarker", "\n;"), tTodayMarker},
-		{line("title", "\n"), tTitle},
+		{titleLine, tTitle},
 	},
 	'e': {{line("excludes", "#\n;"), tExcludes}},
 	's': {{line("section", "\n"), tSection}},
@@ -190,6 +224,11 @@ func tokenize(src common.Src) tokens {
 			}
 			if e = keywordSpaced(src, p, "click"); e >= 0 {
 				state = sClick
+				p = e
+				return true
+			}
+		case 't':
+			if e = bareTitle(src, p); e >= 0 {
 				p = e
 				return true
 			}
@@ -265,9 +304,6 @@ func tokenize(src common.Src) tokens {
 				} else {
 					p = until('\n', p+2)
 				}
-			case c != '}' && d == '%':
-				// Any character but `}` followed by `%` starts a comment that runs to the end of the line.
-				p = until('\n', p+2)
 			case c == '\n':
 				e := p + 1
 				for src.At(e) == '\n' {

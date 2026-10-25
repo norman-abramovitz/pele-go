@@ -20,12 +20,14 @@ var Diagram = &core.Diagram{
 			inheritDir: inheritDir == true,
 			direction:  dir,
 			lineOffset: lineOffset,
+			source:     &source,
+			origin:     limits.Origin,
 			maxEdges:   limits.MaxEdges,
 		})
 		if title != nil && *title != "" {
 			db.title = *title
 		}
-		parseAgentflow(source, db, false)
+		parseAgentflow(source, db, false, limits.Origin)
 		buildGraph(db, config)
 		return db
 	},

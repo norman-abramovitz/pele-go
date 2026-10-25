@@ -10,8 +10,8 @@ import (
 // Diagram is the Cynefin diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "cynefin",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
-		return buildCynefin(parseCynefin(source), title)
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
+		return buildCynefin(parseCynefin(source, limits.Origin), title)
 	},
 	Render: func(m any, config *jsobj.Object, rc *core.Context) core.Rendered {
 		return renderCynefin(m.(cynefinModel), config, rc)

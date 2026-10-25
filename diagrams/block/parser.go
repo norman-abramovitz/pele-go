@@ -25,7 +25,7 @@ type openFrame struct {
 
 const statementStart = "'NODE_ID', 'COLUMNS', 'SPACE_BLOCK', 'BLOCK_DIAGRAM_KEY', 'id-block', 'classDef', 'class', 'style'"
 
-func parseBlock(source string, db *blockDb) {
+func parseBlock(source string, db *blockDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	toks := tokenize(src)
 	types, texts, starts := toks.types, toks.texts, toks.starts
@@ -34,9 +34,9 @@ func parseBlock(source string, db *blockDb) {
 	fail := func(expected string) {
 		t := types[i]
 		if t == tError {
-			perr.Throw(perr.SyntaxError("block", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "block", src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError("block", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "block", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 	}
 
 	expect := func(typ int) string {

@@ -1,6 +1,9 @@
 package railroad
 
-import "github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
+import (
+	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
+)
 
 // `railroad-peg-beta`: parsing expression grammars.
 
@@ -127,8 +130,8 @@ func pegDefinition(r *common.Reader) *syntax {
 	}
 }
 
-func parsePeg(src string) (parsed, []syntaxRule) {
-	return parseGrammar(src, pegLexer, pegTitle, unescape, func(r *common.Reader) syntaxRule {
+func parsePeg(src string, o *perr.Origin) (parsed, []syntaxRule) {
+	return parseGrammar(src, o, pegLexer, pegTitle, unescape, func(r *common.Reader) syntaxRule {
 		name := r.Expect(pegID)
 		r.Expect(pegArrow)
 		definition := pegDefinition(r)

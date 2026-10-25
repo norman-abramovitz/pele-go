@@ -22,7 +22,7 @@ var (
 
 const textTokenNames = "'STR', 'MD_STR', 'ALPHA', 'NUM', 'UNICODE_TEXT', 'PUNCTUATION'"
 
-func parseQuadrant(source string, db *quadrantDb) {
+func parseQuadrant(source string, db *quadrantDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	toks := tokenize(src)
 	types, texts, starts := toks.types, toks.texts, toks.starts
@@ -31,9 +31,9 @@ func parseQuadrant(source string, db *quadrantDb) {
 	fail := func(expected string) {
 		t := types[i]
 		if t == tError {
-			perr.Throw(perr.SyntaxError("quadrantChart", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "quadrantChart", src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError("quadrantChart", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "quadrantChart", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 	}
 
 	expect := func(typ int) string {

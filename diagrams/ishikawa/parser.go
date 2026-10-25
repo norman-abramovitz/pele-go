@@ -12,14 +12,14 @@ const stop = "'SPACELINE', 'NL', 'EOF'"
 // statement is a line of text, with or without indentation, or a blank line; each is ended by
 // a blank line, a line break or the end of the text, and any number of line breaks after
 // that.
-func parseIshikawa(source string, db *ishikawaDb) {
+func parseIshikawa(source string, db *ishikawaDb, o *perr.Origin) {
 	src := jsstr.UTF16(source)
 	t := tokenize(src)
 	types, starts, ends := t.types, t.starts, t.ends
 	i := 0
 
 	fail := func(expected string) {
-		perr.Throw(perr.SyntaxError("ishikawa", src, starts[i], "Expecting "+expected+", got '"+tokenNames[types[i]]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "ishikawa", src, starts[i], "Expecting "+expected+", got '"+tokenNames[types[i]]+"'", false))
 	}
 
 	if types[i] == tSpaceline {

@@ -17,7 +17,7 @@ const (
 // parseVenn ports Mermaid's venn grammar. A token is read only when the grammar has to look
 // at one to decide, because the lexer asks the model whether an indented `text` continues a
 // set, and the statements are what tell the model so.
-func parseVenn(source string, db *vennDb) {
+func parseVenn(source string, db *vennDb, o *perr.Origin) {
 	src := common.Src(jsstr.UTF16(source))
 	lexer := &vennLexer{src: src, db: db}
 	typ := -1
@@ -31,9 +31,9 @@ func parseVenn(source string, db *vennDb) {
 
 	fail := func(expected string) {
 		if peek() == tError {
-			perr.Throw(perr.SyntaxError("venn", src, lexer.start, "", true))
+			perr.Throw(perr.SyntaxError(o, "venn", src, lexer.start, "", true))
 		}
-		perr.Throw(perr.SyntaxError("venn", src, lexer.start, "Expecting "+expected+", got '"+tokenNames[typ]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "venn", src, lexer.start, "Expecting "+expected+", got '"+tokenNames[typ]+"'", false))
 	}
 
 	take := func() string {

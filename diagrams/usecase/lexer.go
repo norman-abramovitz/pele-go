@@ -124,7 +124,8 @@ func keywordAt(src common.Src, at, c int) int {
 	return 0
 }
 
-func lineColumn(src common.Src, offset int) (int, int) {
+func lineColumn(o *perr.Origin, src common.Src, offset int) (int, int) {
+	src, offset = o.Written(src, offset)
 	line := 1
 	lineStart := 0
 	for i := 0; i < offset; i++ {
@@ -141,9 +142,11 @@ func lineColumn(src common.Src, offset int) (int, int) {
 	return line, offset - lineStart + 1
 }
 
-func locationText(src common.Src, start, end int) string {
-	line, column := lineColumn(src, start)
-	return "line " + strconv.Itoa(line) + ", column " + strconv.Itoa(column) + " [" + strconv.Itoa(start) + "," + strconv.Itoa(end) + ")"
+func locationText(o *perr.Origin, src common.Src, start, end int) string {
+	line, column := lineColumn(o, src, start)
+	_, from := o.Written(src, start)
+	_, to := o.Written(src, end)
+	return "line " + strconv.Itoa(line) + ", column " + strconv.Itoa(column) + " [" + strconv.Itoa(from) + "," + strconv.Itoa(to) + ")"
 }
 
 // stringEnd is the end of a quoted string that opens at at, or -1 when the line ends first.
@@ -178,13 +181,15 @@ func charAt(src common.Src, i int) string {
 
 // lexError: Mermaid reports the first character no token starts with, and how many characters
 // its lexer skipped before one did.
-func lexError(src common.Src, offset, length int) *perr.Error {
-	line, column := lineColumn(src, offset)
+func lexError(o *perr.Origin, src common.Src, offset, length int) *perr.Error {
+	line, column := lineColumn(o, src, offset)
+	_, from := o.Written(src, offset)
+	_, to := o.Written(src, offset+length)
 	return &perr.Error{
 		Code: perr.Syntax,
 		Message: "Error lexing usecase diagram: unexpected character: ->" + charAt(src, offset) + "<- at offset: " +
-			strconv.Itoa(offset) + ", skipped " + strconv.Itoa(length) + " characters. at line " + strconv.Itoa(line) +
-			", column " + strconv.Itoa(column) + " [" + strconv.Itoa(offset) + "," + strconv.Itoa(offset+length) + ")",
+			strconv.Itoa(from) + ", skipped " + strconv.Itoa(to-from) + " characters. at line " + strconv.Itoa(line) +
+			", column " + strconv.Itoa(column) + " [" + strconv.Itoa(from) + "," + strconv.Itoa(to) + ")",
 		Type:   "usecase",
 		Line:   line,
 		Column: column,
@@ -194,7 +199,7 @@ func lexError(src common.Src, offset, length int) *perr.Error {
 // tokenize produces the tokens of Mermaid's Chevrotain lexer for use case diagrams: the first
 // pattern in its list that matches wins, a keyword gives way to a longer identifier, and
 // `json id@` and `<<` switch to modes that read a JSON object and a stereotype.
-func tokenize(src common.Src) tokens {
+func tokenize(src common.Src, o *perr.Origin) tokens {
 	var out tokens
 	push := func(t, start, end int) {
 		out.types = append(out.types, t)
@@ -381,7 +386,7 @@ scan:
 					for resume < n && !startsToken(src, resume) {
 						resume++
 					}
-					perr.Throw(lexError(src, i, resume-i))
+					perr.Throw(lexError(o, src, i, resume-i))
 				}
 			}
 		case c == 37:
@@ -474,7 +479,7 @@ scan:
 							for close < n && (src[close] == 10 || src[close] == 13) {
 								close++
 							}
-							perr.Throw(lexError(src, i, close-i))
+							perr.Throw(lexError(o, src, i, close-i))
 						}
 						typ = tUnclosedStereotypeText
 						end = close

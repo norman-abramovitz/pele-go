@@ -95,6 +95,9 @@ type Result struct {
 // Limits are set by the host. A diagram's own configuration cannot change them.
 type Limits struct {
 	MaxEdges float64
+	// Origin locates errors in the source as written. It is not a limit, but rides along
+	// with them to every parser; upstream keeps it in a module variable during the parse.
+	Origin *perr.Origin
 }
 
 // Context is what a diagram type's renderer gets besides its model: the options as the core
@@ -200,7 +203,7 @@ func DetectType(text string) (typ string, ok bool) {
 			typ, ok = "", false
 		}
 	}()
-	d, found := detect.Detect(preprocess.Preprocess(jsstr.Normalize(text)).Text)
+	d, found := detect.Detect(preprocess.Preprocess(jsstr.Normalize(text), nil).Text)
 	return d.Type, found
 }
 
@@ -229,7 +232,7 @@ func parseSource(ctx context.Context, source string, opts Options) parsed {
 	if float64(jsstr.Len(source)) > limit {
 		perr.Throw(perr.New("Diagram source is longer than the limit of "+jsnum.Format(limit)+" characters.", perr.Limit))
 	}
-	pre := preprocess.Preprocess(source)
+	pre := preprocess.Preprocess(source, nil)
 	found, ok := detect.Detect(pre.Text)
 	if !ok {
 		perr.Throw(perr.New("No diagram type detected for the given text.", perr.UnsupportedDiagram))
@@ -255,12 +258,34 @@ func parseSource(ctx context.Context, source string, opts Options) parsed {
 	if diagram.KeepComments {
 		src = pre.WithComments
 	}
+	parsedText := preprocess.EncodeEntities(src, nil) + "\n"
+	origin := perr.NewOrigin(parsedText, inSource(source, diagram.KeepComments))
 	var model any
 	tagErrors(found, func() {
-		model = diagram.Parse(preprocess.EncodeEntities(src)+"\n", config, pre.Title, pre.LineOffset,
-			Limits{MaxEdges: optNumber(opts.MaxEdges, DefaultMaxEdges)})
+		model = diagram.Parse(parsedText, config, pre.Title, pre.LineOffset,
+			Limits{MaxEdges: optNumber(opts.MaxEdges, DefaultMaxEdges), Origin: origin})
 	})
 	return parsed{Detected: found, diagram: diagram, model: model, config: config}
+}
+
+// inSource records preprocessing edits only when a source position is needed.
+func inSource(text string, keepComments bool) func(at int) ([]uint16, int) {
+	var steps *preprocess.Steps
+	var source []uint16
+	return func(at int) ([]uint16, int) {
+		if steps == nil {
+			steps = &preprocess.Steps{}
+			pre := preprocess.Preprocess(text, steps)
+			src := pre.WithComments
+			if !keepComments {
+				src = preprocess.CleanupComments(pre.WithComments, steps)
+			}
+			preprocess.EncodeEntities(src, steps)
+			// Match the line break appended for parsing.
+			source = jsstr.UTF16(preprocess.NormalizeLineBreaks(text) + "\n")
+		}
+		return source, perr.InputOffset(*steps, at)
+	}
 }
 
 func checkContext(ctx context.Context) {
@@ -289,6 +314,8 @@ func tagErrors(found detect.Detected, fn func()) {
 			if e.MermaidType == "" {
 				e.MermaidType = found.MermaidType
 			}
+			e.Message = text.WrittenCodes(e.Message)
+			e.Snippet = text.WrittenCodes(e.Snippet)
 			panic(e)
 		default:
 			panic(r)

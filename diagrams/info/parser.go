@@ -3,6 +3,7 @@ package info
 import (
 	"github.com/Broderick-Westrope/pele-go/internal/diagrams/common"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
+	"github.com/Broderick-Westrope/pele-go/internal/perr"
 )
 
 // Token kinds, in the order of infoTokens.
@@ -32,9 +33,9 @@ type ast struct {
 	title, accTitle, accDescr *string
 }
 
-func parseInfo(src string) ast {
-	tokens := infoLexer.Tokenize(jsstr.UTF16(src), "info")
-	r := common.NewReader(tokens, infoLexer.Types(), "info")
+func parseInfo(src string, o *perr.Origin) ast {
+	tokens := infoLexer.Tokenize(jsstr.UTF16(src), "info", o)
+	r := common.NewReader(tokens, infoLexer.Types(), "info", o)
 	var a ast
 
 	skipNewlines := func() {

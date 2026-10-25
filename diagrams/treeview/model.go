@@ -95,10 +95,11 @@ func populate(ast treeViewAst, db *treeViewDb) {
 
 // readTreeView reads the source to a syntax tree, accepting box-drawing input. Errors name
 // lines of the original text.
-func readTreeView(source string) treeViewAst {
-	text, lineMap := preprocessBoxDrawing(source)
-	if len(lineMap) == 0 {
-		return parseTreeView(text)
+func readTreeView(source string, o *perr.Origin) treeViewAst {
+	text, lineMap, columns := preprocessBoxDrawing(source, o)
+	// The parser already located errors in unchanged text.
+	if text == source {
+		return parseTreeView(text, o)
 	}
 	defer func() {
 		r := recover()
@@ -109,19 +110,39 @@ func readTreeView(source string) treeViewAst {
 		if !ok {
 			panic(r)
 		}
-		message := e.Message
-		if head := strings.IndexByte(message, '\n'); head == -1 {
-			message = remapErrorLines(message, lineMap)
-		} else {
-			message = remapErrorLines(message[:head], lineMap) + message[head:]
-		}
 		line, ok := lineMap[e.Line]
 		if !ok {
-			line = e.Line
+			panic(r)
 		}
-		perr.Throw(&perr.Error{Code: e.Code, Message: message, Type: e.Type, Line: line, Column: e.Column, Snippet: e.Snippet})
+		at := 0
+		if e.Column > 0 {
+			if column, ok := columns[e.Line]; ok {
+				at = column(e.Column - 1)
+			} else {
+				at = e.Column - 1
+			}
+		}
+		units := jsstr.UTF16(source)
+		written := perr.Locate(o, units, lineStart(units, line)+at)
+		head := strings.IndexByte(e.Message, '\n')
+		if head == -1 {
+			head = len(e.Message)
+		}
+		rest := e.Message[head:]
+		if e.Snippet != "" {
+			rest = strings.Replace(rest, e.Snippet, written.Snippet, 1)
+		}
+		message := remapErrorLines(e.Message[:head], map[int]int{e.Line: written.Line}) + rest
+		column, snippet := 0, ""
+		if e.Column > 0 {
+			column = written.Column
+		}
+		if e.Snippet != "" {
+			snippet = written.Snippet
+		}
+		perr.Throw(&perr.Error{Code: e.Code, Message: message, Type: e.Type, Line: written.Line, Column: column, Snippet: snippet})
 	}()
-	return parseTreeView(text)
+	return parseTreeView(text, o)
 }
 
 func buildTreeView(ast treeViewAst, title *string) treeViewModel {

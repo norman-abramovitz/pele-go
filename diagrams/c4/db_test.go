@@ -10,7 +10,7 @@ import (
 func parsed(t *testing.T, src string) *c4Db {
 	t.Helper()
 	db := newC4Db()
-	parseC4(src+"\n", db)
+	parseC4(src+"\n", db, nil)
 	return db
 }
 

@@ -10,12 +10,12 @@ import (
 // Diagram is the c4 diagram type. Register it with pele.Register.
 var Diagram = &core.Diagram{
 	Type: "c4",
-	Parse: func(source string, _ *jsobj.Object, title *string, _ int, _ core.Limits) any {
+	Parse: func(source string, _ *jsobj.Object, title *string, _ int, limits core.Limits) any {
 		db := newC4Db()
 		if title != nil && *title != "" {
 			db.title = *title
 		}
-		parseC4(source, db)
+		parseC4(source, db, limits.Origin)
 		return db
 	},
 	Render: func(m any, _ *jsobj.Object, rc *core.Context) core.Rendered {

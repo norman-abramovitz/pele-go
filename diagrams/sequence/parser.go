@@ -76,7 +76,7 @@ type frame struct {
 	text string
 }
 
-func parseSequence(src common.Src, db *seqDb) {
+func parseSequence(src common.Src, db *seqDb, o *perr.Origin) {
 	tk := tokenize(src)
 	types, texts, starts := tk.types, tk.texts, tk.starts
 	i := 0
@@ -90,9 +90,9 @@ func parseSequence(src common.Src, db *seqDb) {
 	fail := func(expected string) {
 		t := types[i]
 		if t == tERROR {
-			perr.Throw(perr.SyntaxError("sequence", src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, "sequence", src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError("sequence", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
+		perr.Throw(perr.SyntaxError(o, "sequence", src, starts[i], "Expecting "+expected+", got '"+tokenNames[t]+"'", false))
 	}
 	expect := func(typ int) string {
 		if types[i] != typ {

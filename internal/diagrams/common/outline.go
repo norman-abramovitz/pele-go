@@ -363,7 +363,7 @@ func isOutlineStop(typ int) bool {
 
 // ParseOutline makes the calls on db that the grammar's actions make, in the same order, and
 // reports errors in the state where the generated parser would.
-func ParseOutline(src Src, db OutlineDB, kanban bool) {
+func ParseOutline(src Src, db OutlineDB, kanban bool, o *perr.Origin) {
 	diagram := "mindmap"
 	data := ""
 	if kanban {
@@ -377,9 +377,9 @@ func ParseOutline(src Src, db OutlineDB, kanban bool) {
 	fail := func(expected string) {
 		t := types[i]
 		if t == OutlineError {
-			perr.Throw(perr.SyntaxError(diagram, src, starts[i], "", true))
+			perr.Throw(perr.SyntaxError(o, diagram, src, starts[i], "", true))
 		}
-		perr.Throw(perr.SyntaxError(diagram, src, starts[i], "Expecting "+expected+", got '"+OutlineTokenName(t, kanban)+"'", false))
+		perr.Throw(perr.SyntaxError(o, diagram, src, starts[i], "Expecting "+expected+", got '"+OutlineTokenName(t, kanban)+"'", false))
 	}
 
 	keyword := "'" + OutlineTokenName(OutlineKeyword, kanban) + "'"
