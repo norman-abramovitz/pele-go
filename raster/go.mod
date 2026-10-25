@@ -3,7 +3,7 @@ module github.com/Broderick-Westrope/pele-go/raster
 go 1.26.0
 
 require (
-	github.com/Broderick-Westrope/pele-go v0.1.0
+	github.com/Broderick-Westrope/pele-go v0.2.0
 	github.com/stretchr/testify v1.12.1
 	github.com/tetratelabs/wazero v1.12.0
 )

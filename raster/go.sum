@@ -1,5 +1,5 @@
-github.com/Broderick-Westrope/pele-go v0.1.0 h1:YQWRAfT1HutIP7vBnTHoLDf66Mmafq5H7tmXOoxl0Bk=
-github.com/Broderick-Westrope/pele-go v0.1.0/go.mod h1:3p965gnQ/FvxoAef4Tmmn18mSFxA3Ui0/Bbo450IEGw=
+github.com/Broderick-Westrope/pele-go v0.2.0 h1:+3jpTS571UJzldewer5Wp5OhOPxLtpfCB97eGj87jd8=
+github.com/Broderick-Westrope/pele-go v0.2.0/go.mod h1:3p965gnQ/FvxoAef4Tmmn18mSFxA3Ui0/Bbo450IEGw=
 github.com/dlclark/regexp2/v2 v2.8.1 h1:I1jbaCbXeOxdVN8z3fb55Mvtgb94/6+Dh0zjmXjKV/0=
 github.com/dlclark/regexp2/v2 v2.8.1/go.mod h1:avUrQvPaLz2DrFNHJF0taWAFFX2C1GMSSoeiqFjcBmU=
 github.com/dop251/goja v0.0.0-20261010130053-73dc7edc278f h1:YG1l3Oxv2sIF2Xn9SesDXGwsrbZT3EZSKcl3Rs5NuU0=
