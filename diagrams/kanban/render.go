@@ -134,7 +134,7 @@ func textBlock(label text.Label, x, y float64, attrs string, icons *text.Icons, 
 	var out strings.Builder
 	for i, line := range label.Lines {
 		cy := y + text.LineMiddle(label, i)
-		if len(line) == 1 && line[0].Icon == "" && line[0].Math == nil {
+		if len(line) == 1 && line[0].Icon == "" && line[0].Math == nil && line[0].Style&(text.Sub|text.Sup|text.Underline) == 0 {
 			anchor := ""
 			if end {
 				anchor = ` text-anchor="end"`

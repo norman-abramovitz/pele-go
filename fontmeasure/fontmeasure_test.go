@@ -218,3 +218,24 @@ func TestParityWithUpstream(t *testing.T) {
 		})
 	}
 }
+
+func TestWidthOfShiftedAndHyphenatedText(t *testing.T) {
+	m := newMeasurer(t)
+	tests := map[string]struct {
+		text  string
+		style pele.Style
+		want  float64
+	}{
+		"sub is smaller":           {text: "x2", style: pele.Sub, want: m.Width("x2", 16/1.2, 0)},
+		"sup is smaller":           {text: "x2", style: pele.Sup | pele.Bold, want: m.Width("x2", 16/1.2, pele.Bold)},
+		"underline keeps width":    {text: "under", style: pele.Underline, want: m.Width("under", 16, 0)},
+		"soft hyphen is invisible": {text: "co\u00adop", want: m.Width("coop", 16, 0)},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := m.Width(tc.text, 16, tc.style); got != tc.want {
+				t.Errorf("Width(%q, 16, %d) = %v, want %v", tc.text, tc.style, got, tc.want)
+			}
+		})
+	}
+}

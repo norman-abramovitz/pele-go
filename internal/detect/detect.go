@@ -86,14 +86,11 @@ func followedBy(word string, next func(rune) bool) func(string) bool {
 
 func isSpaceOrColon(r rune) bool { return jsstr.IsSpace(r) || r == ':' }
 
-// c4 is /^\s*C4Context|C4Container|C4Component|C4Dynamic|C4Deployment/: only the first
-// alternative is anchored, so the others match anywhere in the text.
+// c4 is /^\s*(?:C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)/.
 func c4(s string) bool {
-	if strings.HasPrefix(afterSpace(s), "C4Context") {
-		return true
-	}
-	for _, name := range []string{"C4Container", "C4Component", "C4Dynamic", "C4Deployment"} {
-		if strings.Contains(s, name) {
+	rest := afterSpace(s)
+	for _, name := range []string{"C4Context", "C4Container", "C4Component", "C4Dynamic", "C4Deployment"} {
+		if strings.HasPrefix(rest, name) {
 			return true
 		}
 	}

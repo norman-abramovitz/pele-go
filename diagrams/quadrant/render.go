@@ -254,9 +254,9 @@ func renderQuadrant(model *quadrantDb, config *jsobj.Object, rc *core.Context) c
 			`" cx="`+svg.Num(cx)+`" cy="`+svg.Num(cy)+`" r="`+svg.Num(r)+`"`+stroke+svg.ResolveStyle(styles).Shape+`/>`)
 	}
 
-	// A label goes below its point, or above, right or left of it when that is the first
-	// place that is inside the chart and free. A second round lets it cross the gaps between
-	// quadrants. Large charts skip the search for a free place.
+	// A label goes below its point, or above, right or left of it, or below its quadrant's
+	// title, when that is the first place that is inside the chart and free. A second round
+	// lets it cross the gaps between quadrants. Large charts skip the search for a free place.
 	isCareful := len(dots) <= careful
 	if isCareful {
 		for _, d := range dots {
@@ -269,22 +269,40 @@ func renderQuadrant(model *quadrantDb, config *jsobj.Object, rc *core.Context) c
 		halfW := float64(t.Width / 2)
 		halfH := float64(t.Size*0.6) + float64((t.Height-t.LineHeight)/2)
 		away := d.reach + textPad
-		spots := [8]float64{cx, cy + away + halfH, cx, cy - away - halfH, cx + away + halfW, cy, cx - away - halfW, cy}
+		inset := min(away, max(0, float64((tileW-t.Width)/2)))
+		upper := cy < top+float64(h/2)
+		quadrant := 3
+		switch {
+		case cx < left+float64(w/2) && upper:
+			quadrant = 1
+		case cx < left+float64(w/2):
+			quadrant = 2
+		case upper:
+			quadrant = 0
+		}
+		heading := 8 + 4*quadrant
+		below := max(cy+away, taken[heading+3]+textPad) + halfH
+		spots := [10]float64{cx, cy + away + halfH, cx, cy - away - halfH, cx + away + halfW, cy, cx - away - halfW, cy, cx, below}
 		tx := cx
 		ty := spots[1]
 		found := false
-		for k := 0; k < 16; k += 2 {
-			spot := k % 8
+		for k := 0; k < 20; k += 2 {
+			spot := k % 10
+			// A label moved below a title keeps clear of the plot's edge.
+			margin := 0.0
+			if spot == 8 {
+				margin = inset
+			}
 			x := spots[spot]
-			if spot < 4 && t.Width < w {
-				x = min(max(spots[spot], left+halfW), left+w-halfW)
+			if (spot < 4 || spot == 8) && t.Width < w {
+				x = min(max(spots[spot], left+halfW+margin), left+w-halfW-margin)
 			}
 			y := spots[spot+1]
 			if x-halfW < left || x+halfW > left+w || y-halfH < top || y+halfH > top+h {
 				continue
 			}
 			from := 8
-			if k < 8 {
+			if k < 10 {
 				from = 0
 			}
 			free := !isCareful || isClear(from, x-halfW, y-halfH, x+halfW, y+halfH)

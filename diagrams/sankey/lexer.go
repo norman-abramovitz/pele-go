@@ -43,9 +43,31 @@ const (
 	sEscapedText
 )
 
-// isTextData is RFC 4180 TEXTDATA: printable ASCII except the double quote and the comma.
+// isTextData is RFC 4180 TEXTDATA extended to Unicode, excluding controls and invalid XML
+// characters.
 func isTextData(c int) bool {
-	return c >= 32 && c <= 126 && c != 34 && c != 44
+	return (c >= 32 && c <= 126 && c != 34 && c != 44) ||
+		(c >= 0xa0 && c <= 0xd7ff) ||
+		(c >= 0xe000 && c <= 0xfffd) ||
+		(c >= 0x10000 && c <= 0x10ffff)
+}
+
+// codePointAt is src.codePointAt(q) for q inside src.
+func codePointAt(src common.Src, q int) int {
+	c := int(src[q])
+	if c >= 0xd800 && c <= 0xdbff && q+1 < len(src) {
+		if d := int(src[q+1]); d >= 0xdc00 && d <= 0xdfff {
+			return 0x10000 + (c-0xd800)<<10 + (d - 0xdc00)
+		}
+	}
+	return c
+}
+
+func codePointLen(c int) int {
+	if c > 0xffff {
+		return 2
+	}
+	return 1
 }
 
 // lowerUnit is a code unit as toLowerCase leaves it, where that is ASCII. The Kelvin sign
@@ -101,9 +123,9 @@ func tokenize(src common.Src) tokens {
 				continue
 			}
 			for q < n {
-				d := int(src[q])
+				d := codePointAt(src, q)
 				if isTextData(d) || d == 44 || d == 13 || d == 10 {
-					q++
+					q += codePointLen(d)
 				} else if d == 34 && src.At(q+1) == 34 {
 					q += 2
 				} else {
@@ -144,8 +166,12 @@ func tokenize(src common.Src) tokens {
 				emit(tDQuote, p, p+1)
 				continue
 			}
-			for q < n && isTextData(int(src[q])) {
-				q++
+			for q < n {
+				d := codePointAt(src, q)
+				if !isTextData(d) {
+					break
+				}
+				q += codePointLen(d)
 			}
 			emit(tNonEscapedText, p, q)
 		}

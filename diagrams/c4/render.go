@@ -267,7 +267,7 @@ func draw(db *c4Db, rc *core.Context, tight bool, gap float64) (core.Rendered, i
 			technText = "[" + r.techn + "]"
 		}
 		techn := text.Layout(technText, false, measurer, small, rt.room, text.Italic, icons)
-		lw := max(label.Width, techn.Width) + 8
+		lw := max(label.Width, techn.Width) + labelPad
 		lh := label.Height + techn.Height
 		if lh == 0 {
 			continue

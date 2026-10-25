@@ -43,6 +43,8 @@ const (
 	// Label widths that fit the gap between two columns, and where there is room to spare.
 	narrow = 88
 	wide   = 160
+	// The space a label's background adds to the width of its text.
+	labelPad = 8
 	// The shared person shape: a head of radius 13 centered 14 below the top, over a body
 	// that starts 26 below it.
 	head = 26

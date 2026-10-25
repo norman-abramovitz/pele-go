@@ -28,8 +28,8 @@ import (
 // commit its tag points to. This module's own version is separate: it moves with changes
 // here, and a new upstream release only changes these.
 const (
-	UpstreamVersion = "1.8.0"
-	UpstreamCommit  = "8fad23bd51783e4df1204e177a7fb0d2a30dcd13"
+	UpstreamVersion = "1.9.0"
+	UpstreamCommit  = "e7f092a4de147cc32210913c20e36eaa5fcd0ef1"
 )
 
 // Options are the render options, upstream's RenderOptions. The zero value renders as
@@ -194,6 +194,13 @@ const (
 	Italic = text.Italic
 	// Mono marks monospace text, such as a code span.
 	Mono = text.Mono
+	// Sub and Sup mark subscript and superscript text, which the SVG draws at
+	// font-size="smaller". A measurer should measure it at that smaller size: the built-in
+	// ones divide the size by 1.2, as upstream does.
+	Sub = text.Sub
+	Sup = text.Sup
+	// Underline marks underlined text. It does not change the width.
+	Underline = text.Underline
 )
 
 // DefaultMeasurer returns the measurer Render uses when Options.Measurer is nil: upstream's

@@ -12,10 +12,16 @@ type Style int
 
 // The Style bits.
 const (
-	Bold   Style = 1
-	Italic Style = 2
-	Mono   Style = 4
+	Bold      Style = 1
+	Italic    Style = 2
+	Mono      Style = 4
+	Sub       Style = 8
+	Sup       Style = 16
+	Underline Style = 32
 )
+
+// smaller is an approximate divisor for CSS font-size="smaller".
+const smaller = 1.2
 
 // Measurer measures the advance width of text in pixels. Implementations must be safe for
 // concurrent use.
@@ -49,7 +55,8 @@ func isWide(c rune) bool {
 }
 
 func isZeroWidth(c rune) bool {
-	return (c >= 0x300 && c <= 0x36f) ||
+	return c == 0xad ||
+		(c >= 0x300 && c <= 0x36f) ||
 		(c >= 0x200b && c <= 0x200f) ||
 		(c >= 0xdc00 && c <= 0xdfff) ||
 		(c >= 0xfe00 && c <= 0xfe0f) ||
@@ -64,6 +71,10 @@ var Metrics Measurer = metrics{}
 
 func (metrics) Width(text string, size float64, style Style) float64 {
 	mono := style&Mono != 0
+	eff := size
+	if style&(Sub|Sup) != 0 {
+		eff = size / smaller
+	}
 	table := regularTable()
 	if style&Bold != 0 {
 		table = boldTable()
@@ -105,5 +116,5 @@ func (metrics) Width(text string, size float64, style Style) float64 {
 		}
 		add(r)
 	}
-	return float64(units) * size / 1000
+	return float64(units) * eff / 1000
 }

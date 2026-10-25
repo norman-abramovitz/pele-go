@@ -77,9 +77,11 @@ type end struct {
 }
 
 type card struct {
-	text string
-	math *text.Label
-	x, y float64
+	text   string
+	math   *text.Label
+	x, y   float64
+	w, h   float64
+	parent int
 }
 
 // annotation is an annotation's text, or its label when it holds typeset math.
@@ -658,7 +660,7 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 
 	minX, minY := 0.0, 0.0
 	maxX, maxY := lay.Width, lay.Height
-	addCard := func(raw string, width, x, y float64, side int, after bool) {
+	addCard := func(parent int, raw string, width, x, y float64, side int, after bool) {
 		if raw == "" {
 			return
 		}
@@ -693,7 +695,7 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 				cy += 3 + halfT
 			}
 		}
-		cards = append(cards, card{text: text.DecodeEntities(raw), math: math, x: cx, y: cy})
+		cards = append(cards, card{text: text.DecodeEntities(raw), math: math, x: cx, y: cy, w: width, h: h, parent: parent})
 		minX = min(minX, cx-halfW)
 		maxX = max(maxX, cx+halfW)
 		minY = min(minY, cy-halfT)
@@ -713,8 +715,10 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 			v := views[ce.Src]
 			x := c.X + float64(v.w/2)
 			spread := min(float64(v.h/2)-4, float64(8+k*6))
-			addCard(edge.startLabelRight, startRoom[i], x, c.Y-spread, 1, false)
-			addCard(edge.endLabelLeft, endRoom[i], x, c.Y+spread, 1, true)
+			addCard(ce.Src, edge.startLabelRight, startRoom[i], x, c.Y-spread, 1, false)
+			addCard(ce.Dst, edge.endLabelLeft, endRoom[i], x, c.Y+spread, 1, true)
+			ce.LabelX = c.X + float64(v.w/2) + loop + float64(k*8) + 4 + float64(ce.LabelW/2)
+			ce.LabelY = c.Y
 		} else if len(route) >= 6 {
 			last := len(route) - 3
 			fromSide, fromAfter := 2, true
@@ -725,8 +729,25 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 			if to := ends[i]; to != nil {
 				toSide, toAfter = to.side, to.after
 			}
-			addCard(edge.startLabelRight, startRoom[i], route[0], route[1], fromSide, fromAfter)
-			addCard(edge.endLabelLeft, endRoom[i], route[last], route[last+1], toSide, toAfter)
+			addCard(ce.Src, edge.startLabelRight, startRoom[i], route[0], route[1], fromSide, fromAfter)
+			addCard(ce.Dst, edge.endLabelLeft, endRoom[i], route[last], route[last+1], toSide, toAfter)
+		}
+	}
+
+	if available := options.MaxWidth; available != nil && *available > 0 && maxX-minX+float64(2*pad) > *available {
+		all := slices.Clone(cnodes)
+		for _, item := range cards {
+			c := layout.NewCNode(item.w, item.h, item.parent)
+			c.X, c.Y = item.x, item.y
+			all = append(all, c)
+		}
+		if wrapped, ok := layout.WrapComponents(all, cedges, max(1, *available-float64(2*pad)), numberOption(conf, "nodeSpacing", nodeSep)); ok {
+			copy(cnodes, all)
+			for i := range cards {
+				cards[i].x, cards[i].y = all[len(cnodes)+i].X, all[len(cnodes)+i].Y
+			}
+			minX, minY = 0, 0
+			maxX, maxY = wrapped.Width, wrapped.Height
 		}
 	}
 
@@ -890,8 +911,6 @@ func draw(db *classDb, config *jsobj.Object, rc *core.Context, turned, tight boo
 				SX: x, SY: y - spread, SDX: -1, SDY: 0,
 				EX: x, EY: y + spread, EDX: -1, EDY: 0,
 			}
-			ce.LabelX = c.X + float64(v.w/2) + reach + 4 + float64(ce.LabelW/2)
-			ce.LabelY = c.Y
 		} else {
 			route := ce.Route
 			for k := 0; k < len(route); k += 3 {

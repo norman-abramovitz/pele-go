@@ -2,7 +2,9 @@ package text
 
 import (
 	"math"
+	"slices"
 	"strings"
+	"sync"
 
 	"github.com/Broderick-Westrope/pele-go/internal/jsmath"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
@@ -32,6 +34,43 @@ type Label struct {
 
 // LineHeight is the line height as a multiple of the font size.
 const LineHeight = 1.5
+
+// Lines of one wrapped label sit closer, so the label reads as one block.
+const wrappedLineHeight = 1.3
+
+// tagStyle is upstream's TAG_STYLES.
+func tagStyle(tag string) Style {
+	switch tag {
+	case "b", "strong":
+		return Bold
+	case "i", "em", "cite", "dfn", "var":
+		return Italic
+	case "code", "kbd", "samp", "tt":
+		return Mono
+	case "sub":
+		return Sub
+	case "sup":
+		return Sup
+	case "u", "ins":
+		return Underline
+	}
+	return 0
+}
+
+const shift = Sub | Sup
+
+var htmlTags = sync.OnceValue(func() map[string]bool {
+	set := map[string]bool{}
+	for _, tag := range strings.Split("a abbr address article aside audio b bdi bdo big blockquote body br button caption center cite code col "+
+		"colgroup data dd del details dfn dialog div dl dt em embed fieldset figcaption figure font footer form h1 h2 "+
+		"h3 h4 h5 h6 head header hr html i iframe img input ins kbd label legend li link main map mark meta meter nav "+
+		"noscript object ol optgroup option output p picture pre progress q rp rt ruby s samp script section select "+
+		"small source span strike strong style sub summary sup table tbody td template textarea tfoot th thead time "+
+		"title tr track tt u ul var video wbr", " ") {
+		set[tag] = true
+	}
+	return set
+})
 
 var empty = Label{}
 
@@ -117,6 +156,14 @@ const (
 func isClose(r rune) bool { return strings.ContainsRune(closePunct, r) }
 func isOpen(r rune) bool  { return strings.ContainsRune(openPunct, r) }
 
+// isHint is a break hint: a zero-width space, and a soft hyphen, which shows as '-' where a
+// line breaks.
+func isHint(r rune) bool { return r == 0x200b || r == 0xad }
+
+const softHyphen = "\u00ad"
+
+func hasHint(s string) bool { return strings.Contains(s, "\u200b") || strings.Contains(s, softHyphen) }
+
 func hasCJK(s string) bool {
 	for i := 0; i < len(s); {
 		r, n := jsstr.Decode(s, i)
@@ -160,7 +207,7 @@ func skipWhile(s string, i int, ok func(rune) bool) int {
 }
 
 // pieceAt matches one piece of the wrap pattern at i and returns its end:
-// \s*(?:[OPEN]*[CJK][CLOSE]*|[^\sCJK]+[CLOSE]*)\s*|\s+
+// \s*(?:[OPEN]*[CJK][CLOSE]*|[^\sCJK HINT]+[HINT]*[CLOSE]*|[HINT]+)\s*|\s+
 // The leading \s* backs off when what follows does not match, which matters for U+3000:
 // it is both whitespace and a CJK character.
 func pieceAt(s string, i int) int {
@@ -184,7 +231,7 @@ func pieceAt(s string, i int) int {
 	return -1
 }
 
-// wordAt matches [OPEN]*[CJK][CLOSE]* or [^\sCJK]+[CLOSE]* at p.
+// wordAt matches [OPEN]*[CJK][CLOSE]*, [^\sCJK HINT]+[HINT]*[CLOSE]* or [HINT]+ at p.
 func wordAt(s string, p int) int {
 	var opens []int
 	for q := p; ; {
@@ -200,11 +247,14 @@ func wordAt(s string, p int) int {
 			return skipWhile(s, opens[k]+n, isClose)
 		}
 	}
-	end := skipWhile(s, p, func(r rune) bool { return !jsstr.IsSpace(r) && !isCJK(r) })
+	end := skipWhile(s, p, func(r rune) bool { return !jsstr.IsSpace(r) && !isCJK(r) && !isHint(r) })
 	if end == p {
-		return -1
+		if end = skipWhile(s, p, isHint); end == p {
+			return -1
+		}
+		return end
 	}
-	return skipWhile(s, end, isClose)
+	return skipWhile(s, skipWhile(s, end, isHint), isClose)
 }
 
 // pieces splits text where a line may wrap, as text.match(RE_PIECE) does.
@@ -386,13 +436,23 @@ func isWordRune(r rune) bool {
 	return r < 128 && r >= 0 && isWordByte(byte(r))
 }
 
+type openTags struct {
+	style Style
+	// Sub/sup stack; only the innermost tag shifts text.
+	shifts []Style
+}
+
 // inline splits inline HTML and, for markdown labels, emphasis markers into styled spans.
-func inline(line *[]Span, source string, markdown bool, base, htmlStyle Style, icons *Icons, found *marks) Style {
-	style := htmlStyle
+func inline(line *[]Span, source string, markdown bool, base Style, open *openTags, icons *Icons, found *marks) {
+	style := open.style
 	var marked Style
 	var text strings.Builder
 	flush := func() {
-		pushIcons(line, text.String(), style, icons, found)
+		var top Style
+		if k := len(open.shifts); k > 0 {
+			top = open.shifts[k-1]
+		}
+		pushIcons(line, text.String(), style|top, icons, found)
 		text.Reset()
 	}
 	n := len(source)
@@ -402,25 +462,37 @@ func inline(line *[]Span, source string, markdown bool, base, htmlStyle Style, i
 			if name, end, ok := tagAt(source, i); ok {
 				tag := strings.ToLower(name)
 				closing := i+1 < n && source[i+1] == '/'
-				var bit Style
-				switch tag {
-				case "b", "strong":
-					bit = Bold
-				case "i", "em":
-					bit = Italic
-				}
-				if bit != 0 {
+				bit := tagStyle(tag)
+				if bit&shift != 0 {
+					flush()
+					at := -1
+					for k := len(open.shifts) - 1; k >= 0; k-- {
+						if open.shifts[k] == bit {
+							at = k
+							break
+						}
+					}
+					if !closing {
+						open.shifts = append(open.shifts, bit)
+					} else if at != -1 {
+						open.shifts = slices.Delete(open.shifts, at, at+1)
+					}
+				} else if bit != 0 {
 					flush()
 					if closing {
-						htmlStyle = (htmlStyle &^ bit) | (base & bit)
+						open.style = (open.style &^ bit) | (base & bit)
 						style = (style &^ bit) | (base & bit)
 					} else {
-						htmlStyle |= bit
+						open.style |= bit
 						style |= bit
 					}
 				}
-				i = end
-				continue
+				// Other HTML tags are dropped and their text kept. Anything else shaped like a
+				// tag, such as the type in List<T>, is text.
+				if bit != 0 || htmlTags()[tag] {
+					i = end
+					continue
+				}
 			}
 		} else if markdown && (ch == '*' || ch == '_') {
 			double := i+1 < n && source[i+1] == ch
@@ -428,7 +500,7 @@ func inline(line *[]Span, source string, markdown bool, base, htmlStyle Style, i
 			if double {
 				bit, size = Bold, 2
 			}
-			open := marked&bit == 0
+			opening := marked&bit == 0
 			prev := rune(' ')
 			if i > 0 {
 				prev, _ = jsstr.DecodeLast(source, i)
@@ -438,8 +510,8 @@ func inline(line *[]Span, source string, markdown bool, base, htmlStyle Style, i
 				next, _ = jsstr.Decode(source, i+size)
 			}
 			marker := source[i : i+size]
-			canOpen := open && !jsstr.IsSpace(next) && strings.Contains(source[i+size:], marker)
-			canClose := !open && !jsstr.IsSpace(prev)
+			canOpen := opening && !jsstr.IsSpace(next) && strings.Contains(source[i+size:], marker)
+			canClose := !opening && !jsstr.IsSpace(prev)
 			wordy := ch == '_' && isWordRune(prev) && isWordRune(next)
 			if (canOpen || canClose) && !wordy {
 				flush()
@@ -459,7 +531,6 @@ func inline(line *[]Span, source string, markdown bool, base, htmlStyle Style, i
 		i += size
 	}
 	flush()
-	return htmlStyle
 }
 
 func measureSpans(line []Span, m Measurer, size float64) float64 {
@@ -480,10 +551,14 @@ func measureSpans(line []Span, m Measurer, size float64) float64 {
 func wrap(line []Span, m Measurer, size, maxWidth float64, out *[][]Span, widths *[]float64) {
 	var current []Span
 	width := 0.0
-	commit := func() {
+	commit := func(hyphen bool) {
 		if n := len(current); n > 0 && plain(&current[n-1]) {
 			last := &current[n-1]
-			if trimmed := jsstr.TrimEnd(last.Text); trimmed != last.Text {
+			trimmed := jsstr.TrimEnd(last.Text)
+			if hyphen && strings.HasSuffix(last.Text, softHyphen) {
+				trimmed = strings.TrimSuffix(trimmed, softHyphen) + "-"
+			}
+			if trimmed != last.Text {
 				last.Text = trimmed
 				w := m.Width(trimmed, size, last.Style)
 				width += w - last.Width
@@ -495,33 +570,79 @@ func wrap(line []Span, m Measurer, size, maxWidth float64, out *[][]Span, widths
 		current = nil
 		width = 0
 	}
-	for _, span := range line {
+	for si, span := range line {
 		if span.Icon != "" || span.Math != nil {
 			w := float64(size * 1.25)
 			if span.Math != nil {
 				w = span.Math.Width
 			}
 			if width > 0 && width+w > maxWidth {
-				commit()
+				commit(false)
 			}
 			span.Width = w
 			current = append(current, span)
 			width += w
 			continue
 		}
-		for _, piece := range pieces(span.Text) {
-			part := piece
-			if width > 0 && width+m.Width(jsstr.TrimEnd(part), size, span.Style) > maxWidth {
-				commit()
+		parts := pieces(span.Text)
+		// A piece ending in a soft hyphen fits if its '-' does, or if the rest of the word does,
+		// which hides the hyphen. The line only grows along a word, so no later hyphen in it fits
+		// either, and the remaining width of each word makes this one check.
+		soft := strings.Contains(span.Text, softHyphen)
+		n := 0
+		if soft {
+			n = len(parts)
+		}
+		own := make([]float64, n)
+		rest := make([]float64, n+1)
+		for q := n - 1; q >= 0; q-- {
+			// A soft hyphen before a space is no break of its own: the space is.
+			shy := strings.HasSuffix(parts[q], softHyphen)
+			end := jsstr.TrimEnd(parts[q])
+			if shy {
+				end = strings.TrimSuffix(end, softHyphen)
+			}
+			own[q] = m.Width(end, size, span.Style)
+			switch {
+			case !shy:
+				rest[q] = own[q]
+			case q == n-1:
+				// Word width beyond this span is unknown.
+				if si == len(line)-1 {
+					rest[q] = own[q]
+				} else {
+					rest[q] = math.Inf(1)
+				}
+			default:
+				rest[q] = own[q] + rest[q+1]
+			}
+		}
+		for p, part := range parts {
+			var partWidth float64
+			if soft {
+				partWidth = own[p]
+			} else {
+				partWidth = m.Width(jsstr.TrimEnd(part), size, span.Style)
+			}
+			var fits bool
+			if !soft || !strings.HasSuffix(part, softHyphen) {
+				fits = width+partWidth <= maxWidth
+			} else {
+				fits = width+m.Width(strings.TrimSuffix(part, softHyphen)+"-", size, span.Style) <= maxWidth || width+rest[p] <= maxWidth
+			}
+			if width > 0 && !fits {
+				// Breaking at whitespace leaves a preceding soft hyphen hidden.
+				commit(jsstr.TrimStart(part) == part)
 				part = jsstr.TrimStart(part)
 			}
-			if n := len(current); n > 0 && plain(&current[n-1]) && current[n-1].Style == span.Style {
-				last := &current[n-1]
+			if k := len(current); k > 0 && plain(&current[k-1]) && current[k-1].Style == span.Style {
+				last := &current[k-1]
 				last.Text += part
-				last.Width = m.Width(last.Text, size, last.Style)
-				width = 0
-				for _, s := range current {
-					width += s.Width
+				// Remeasuring for each zero-width piece would take quadratic time.
+				if partWidth > 0 || jsstr.TrimEnd(part) != part {
+					before := last.Width
+					last.Width = m.Width(last.Text, size, last.Style)
+					width += last.Width - before
 				}
 			} else {
 				w := m.Width(part, size, span.Style)
@@ -531,7 +652,7 @@ func wrap(line []Span, m Measurer, size, maxWidth float64, out *[][]Span, widths
 		}
 	}
 	if len(current) > 0 || len(*out) == 0 {
-		commit()
+		commit(false)
 	}
 }
 
@@ -587,7 +708,7 @@ func Layout(raw string, markdown bool, m Measurer, size, maxWidth float64, base 
 	if !hasMarkup(raw) && !strings.Contains(raw, "&") && !strings.Contains(raw, "ﬂ") {
 		text := jsstr.Trim(raw)
 		width := m.Width(text, size, base)
-		if width <= maxWidth || !(strings.Contains(text, " ") || hasCJK(text)) {
+		if width <= maxWidth || !(strings.Contains(text, " ") || hasCJK(text) || hasHint(text)) {
 			return Label{
 				Lines:      [][]Span{{{Text: text, Style: base, Width: width}}},
 				Widths:     []float64{width},
@@ -606,7 +727,8 @@ func Layout(raw string, markdown bool, m Measurer, size, maxWidth float64, base 
 				widest = w
 			}
 		}
-		return Label{Lines: lines, Widths: widths, Width: widest, Height: float64(len(lines)) * lineHeight, Size: size, LineHeight: lineHeight}
+		snug := snugLineHeight(len(lines), size, lineHeight)
+		return Label{Lines: lines, Widths: widths, Width: widest, Height: float64(len(lines)) * snug, Size: size, LineHeight: snug}
 	}
 	return layoutMarkup(raw, markdown, m, size, maxWidth, base, lineHeight, icons, nil)
 }
@@ -627,10 +749,10 @@ func layoutLines(raw string, markdown bool, m Measurer, size, maxWidth float64, 
 	var lines [][]Span
 	var widths []float64
 	// HTML tags can span explicit breaks; Markdown emphasis stays local to each line.
-	htmlStyle := base
+	open := &openTags{style: base}
 	for _, part := range splitBreaks(source) {
 		var line []Span
-		htmlStyle = inline(&line, jsstr.Trim(part), markdown, base, htmlStyle, icons, found)
+		inline(&line, jsstr.Trim(part), markdown, base, open, icons, found)
 		w := measureSpans(line, m, size)
 		if w > maxWidth {
 			wrap(line, m, size, maxWidth, &lines, &widths)
@@ -645,7 +767,15 @@ func layoutLines(raw string, markdown bool, m Measurer, size, maxWidth float64, 
 			width = w
 		}
 	}
-	return Label{Lines: lines, Widths: widths, Width: width, Height: float64(len(lines)) * lineHeight, Size: size, LineHeight: lineHeight}
+	snug := snugLineHeight(len(lines), size, lineHeight)
+	return Label{Lines: lines, Widths: widths, Width: width, Height: float64(len(lines)) * snug, Size: size, LineHeight: snug}
+}
+
+func snugLineHeight(lines int, size, lineHeight float64) float64 {
+	if lines > 1 {
+		return jsmath.Round(size * wrappedLineHeight)
+	}
+	return lineHeight
 }
 
 // WithHeights sets the label's line heights for the math it holds.

@@ -109,6 +109,12 @@ res, err := pele.Render(ctx, src, pele.Options{Measurer: m})
 only package that pulls in `golang.org/x/image`. You can also implement `pele.TextMeasurer`
 yourself; it must be safe for concurrent use and must not panic (as must `Options.Icons` and `Options.Math`).
 
+A measurer is passed the `pele.Style` bits a span is drawn with: `Bold`, `Italic`, `Mono`
+(`<code>`, `<kbd>`, `<samp>`, `<tt>`), `Sub` and `Sup` (`<sub>`, `<sup>`) and `Underline`
+(`<u>`, `<ins>`). The SVG draws subscript and superscript at `font-size="smaller"`, so measure
+them at the size divided by 1.2, as both built-in measurers do. Both also measure a soft
+hyphen (U+00AD) as zero width: labels may break at one, and then draw it as `-`.
+
 ## Errors
 
 Failures are `*pele.Error`. Read one with `errors.As`:

@@ -1,13 +1,13 @@
 # Parity with upstream
 
-pele-go's output is byte-identical to Pele 1.8.0's for the same source, options and text
+pele-go's output is byte-identical to Pele 1.9.0's for the same source, options and text
 measurer. This page covers how that's checked and where the port deliberately differs.
 
 ## How parity is checked
 
 Byte-identical is checked by string comparison against upstream itself, not by eye:
 
-- **goja:** `internal/oracle` runs the npm `pele@1.8.0` bundle (checksum pinned) in
+- **goja:** `internal/oracle` runs the npm `pele@1.9.0` bundle (checksum pinned) in
   [goja](https://github.com/dop251/goja), with the same Go measurer on both sides.
 - **V8:** the same bundle under Node, when `node` is on `PATH`. Where goja and V8 disagree
   (lone surrogates, numbers past 2^64), V8 wins.

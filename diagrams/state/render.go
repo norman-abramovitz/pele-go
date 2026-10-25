@@ -194,6 +194,15 @@ func renderState(db *stateDb, config *jsobj.Object, rc *core.Context) core.Rende
 // runs down.
 func draw(db *stateDb, config *jsobj.Object, rc *core.Context, turned bool) core.Rendered {
 	graph := db.graph
+	// State diagrams follow the flowchart curve.
+	var curve string
+	if flow, ok := config.Get("flowchart"); ok {
+		if obj, ok := flow.(*jsobj.Object); ok {
+			if v, ok := obj.Get("curve"); ok {
+				curve, _ = v.(string)
+			}
+		}
+	}
 	options := rc.Options
 	size := 16.0
 	if options.FontSize != nil {
@@ -610,6 +619,8 @@ func draw(db *stateDb, config *jsobj.Object, rc *core.Context, turned bool) core
 		EdgeSep:  edgeSep,
 		RankSep:  numberOption(config, "rankSpacing", rankSep),
 		PortSep:  20,
+		Tracks:   curve == "step" || curve == "stepBefore" || curve == "stepAfter",
+		Straight: curve == "linear",
 		HeadRoom: svg.MarkerTrim("arrow_point"),
 	})
 
@@ -933,7 +944,7 @@ func draw(db *stateDb, config *jsobj.Object, rc *core.Context, turned bool) core
 					route = append(route, point...)
 				}
 			}
-			path = svg.RoutePath(route, "", 0, svg.MarkerTrim(endType), leaves, arrives)
+			path = svg.RoutePath(route, curve, 0, svg.MarkerTrim(endType), leaves, arrives)
 		}
 		class := "pele-transition"
 		if note {

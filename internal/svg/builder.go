@@ -89,8 +89,12 @@ func Num(value float64) string {
 }
 
 const (
-	boldAttr   = ` font-weight="var(--_w)"`
-	italicAttr = ` font-style="italic"`
+	boldAttr      = ` font-weight="var(--_w)"`
+	italicAttr    = ` font-style="italic"`
+	underlineAttr = ` text-decoration="underline"`
+	monoAttr      = ` font-family="var(--_fm)"`
+	subAttr       = ` baseline-shift="sub" font-size="smaller"`
+	supAttr       = ` baseline-shift="super" font-size="smaller"`
 )
 
 // SpanStyle returns the attributes for a span's emphasis.
@@ -102,13 +106,24 @@ func SpanStyle(style text.Style) string {
 	if style&text.Italic != 0 {
 		s += italicAttr
 	}
+	if style&text.Mono != 0 {
+		s += monoAttr
+	}
+	if style&text.Underline != 0 {
+		s += underlineAttr
+	}
+	if style&text.Sub != 0 {
+		s += subAttr
+	} else if style&text.Sup != 0 {
+		s += supAttr
+	}
 	return s
 }
 
 // SharedStyle returns the emphasis every span of a label has. It is written once, on the
 // text element, where a CSS rule for the label reaches it.
 func SharedStyle(label text.Label) text.Style {
-	shared := text.Bold | text.Italic
+	shared := text.Bold | text.Italic | text.Mono
 	any := false
 	for _, line := range label.Lines {
 		for _, span := range line {
@@ -133,6 +148,9 @@ func TextStyle(attrs string, shared text.Style) string {
 	}
 	if shared&text.Italic != 0 && !strings.Contains(attrs, ` font-style="`) {
 		attrs += italicAttr
+	}
+	if shared&text.Mono != 0 && !strings.Contains(attrs, ` font-family="`) {
+		attrs += monoAttr
 	}
 	return attrs
 }

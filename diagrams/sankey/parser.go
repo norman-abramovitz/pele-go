@@ -7,6 +7,7 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/jsnum"
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
 	"github.com/Broderick-Westrope/pele-go/internal/perr"
+	"github.com/Broderick-Westrope/pele-go/internal/text"
 )
 
 func isBlank(c uint16) bool {
@@ -95,7 +96,15 @@ func parseSankey(source string, db *sankeyDb) {
 		return text
 	}
 
-	name := func() string { return strings.ReplaceAll(jsstr.Trim(field()), `""`, `"`) }
+	name := func() string {
+		start := starts[i]
+		value := strings.ReplaceAll(jsstr.Trim(field()), `""`, `"`)
+		// Entity codes can encode characters excluded by the lexer.
+		if hasInvalidXML(text.DecodeEntities(value)) {
+			perr.Throw(perr.SyntaxError("sankey", src, start, "Invalid XML character in node name", false))
+		}
+		return value
+	}
 
 	expect(tSankey, "")
 	expect(tNewline, "")
@@ -119,4 +128,21 @@ func parseSankey(source string, db *sankeyDb) {
 	if types[i] != tEnd {
 		fail("'NEWLINE', 'EOF'")
 	}
+}
+
+// hasInvalidXML is /[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]/u.test(s): with the u
+// flag a surrogate pair is one character, so only lone surrogates match.
+func hasInvalidXML(s string) bool {
+	units := jsstr.UTF16(s)
+	for k := 0; k < len(units); k++ {
+		c := units[k]
+		if c >= 0xd800 && c <= 0xdbff && k+1 < len(units) && units[k+1] >= 0xdc00 && units[k+1] <= 0xdfff {
+			k++
+			continue
+		}
+		if c <= 0x08 || c == 0x0b || c == 0x0c || (c >= 0x0e && c <= 0x1f) || (c >= 0xd800 && c <= 0xdfff) || c == 0xfffe || c == 0xffff {
+			return true
+		}
+	}
+	return false
 }

@@ -23,6 +23,10 @@ import (
 	"github.com/Broderick-Westrope/pele-go/internal/jsstr"
 )
 
+// smaller is the divisor for the pele.Sub and pele.Sup style bits, which the SVG draws at
+// font-size="smaller". It is upstream's approximation.
+const smaller = 1.2
+
 // measurePPEM is large so that rounding advances to 26.6 fixed point is negligible; widths
 // scale linearly from it.
 const measurePPEM = 1024
@@ -63,9 +67,11 @@ var faceNames = [4]string{"regular", "bold", "italic", "bold italic"}
 // the GPOS kern feature for the latn script (or DFLT), else the legacy kern table. Other
 // GPOS features, GSUB substitutions such as ligatures, and shaping are not applied, so
 // widths can differ from a browser's for scripts that need them. Anvil's measure.go, which
-// this generalises, used the same calls, so with the same fonts the widths are equal. A character the face has no glyph for is measured as 'n'. Lone
-// surrogates in text are measured as U+FFFD, the character pele.Render writes in their
-// place.
+// this generalises, used the same calls, so with the same fonts the widths are equal. A
+// character the face has no glyph for is measured as 'n'. Lone surrogates in text are
+// measured as U+FFFD, the character pele.Render writes in their place. A soft hyphen
+// (U+00AD) measures zero, as a browser draws it where the line does not break there. Text
+// with the pele.Sub or pele.Sup bit is measured at the size divided by 1.2.
 func New(regular, bold, italic, boldItalic []byte, opts ...Option) (pele.TextMeasurer, error) {
 	var o options
 	for _, opt := range opts {
@@ -115,6 +121,9 @@ func (m *measurer) Width(text string, size float64, style pele.Style) float64 {
 	var total fixed.Int26_6
 	prev := sfnt.GlyphIndex(0)
 	for _, r := range jsstr.WellFormed(text) {
+		if r == 0xad {
+			continue
+		}
 		g, err := f.font.GlyphIndex(buf, r)
 		if err != nil || g == 0 {
 			g = f.fallback
@@ -128,6 +137,9 @@ func (m *measurer) Width(text string, size float64, style pele.Style) float64 {
 			total += adv
 		}
 		prev = g
+	}
+	if style&(pele.Sub|pele.Sup) != 0 {
+		size /= smaller
 	}
 	return float64(total) / 64 / measurePPEM * size
 }

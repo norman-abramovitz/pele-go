@@ -100,6 +100,8 @@ vi.mock('../../src/core.js', async (importOriginal) => {
     let kind = 'default';
     if (measurer === metricsMeasurer) kind = 'metrics';
     else if (measurer !== undefined) return { unsupported: 'custom measurer' };
+    // A test's stand-in canvas makes the default measurer a canvas one, which replay lacks.
+    else if (globalThis.OffscreenCanvas !== undefined) return { unsupported: 'canvas measurer' };
     try {
       const encoded = encode(rest);
       if (now !== undefined) encoded.now = now instanceof Date ? now.getTime() : now;
